@@ -1,13 +1,13 @@
 #include "ModbusSlave.h"
 
-/* RTU Ó¦´ð´úÂë */
-#define RSP_OK 0x00			  /* ³É¹¦ */
-#define RSP_ERR_CMD 0x01	  /* ²»Ö§³ÖµÄ¹¦ÄÜÂë */
-#define RSP_ERR_REG_ADDR 0x02 /* ¼Ä´æÆ÷µØÖ·´íÎó */
-#define RSP_ERR_VALUE 0x03	  /* Êý¾ÝÖµÓò´íÎó */
-#define RSP_ERR_WRITE 0x04	  /* Ð´ÈëÊ§°Ü */
+/* RTU åº”ç­”ä»£ç  */
+#define RSP_OK 0x00			  /* æˆåŠŸ */
+#define RSP_ERR_CMD 0x01	  /* ä¸æ”¯æŒçš„åŠŸèƒ½ç  */
+#define RSP_ERR_REG_ADDR 0x02 /* å¯„å­˜å™¨åœ°å€é”™è¯¯ */
+#define RSP_ERR_VALUE 0x03	  /* æ•°æ®å€¼åŸŸé”™è¯¯ */
+#define RSP_ERR_WRITE 0x04	  /* å†™å…¥å¤±è´¥ */
 
-// CRC ¸ßÎ»×Ö½ÚÖµ±í
+// CRC é«˜ä½å­—èŠ‚å€¼è¡¨
 static const uint8_t s_CRCHi[] = {
 	0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
 	0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
@@ -35,7 +35,7 @@ static const uint8_t s_CRCHi[] = {
 	0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
 	0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
 	0x80, 0x41, 0x00, 0xC1, 0x81, 0x40};
-// CRC µÍÎ»×Ö½ÚÖµ±í
+// CRC ä½Žä½å­—èŠ‚å€¼è¡¨
 static const uint8_t s_CRCLo[] = {
 	0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06,
 	0x07, 0xC7, 0x05, 0xC5, 0xC4, 0x04, 0xCC, 0x0C, 0x0D, 0xCD,
@@ -66,34 +66,34 @@ static const uint8_t s_CRCLo[] = {
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: CRC16Modbus
-*	¹¦ÄÜËµÃ÷: ¼ÆËãCRC¡£ ÓÃÓÚModbusÐ­Òé¡£
-*	ÐÎ    ²Î: pucBuf : ²ÎÓëÐ£ÑéµÄÊý¾Ý
-*			  _usLen : Êý¾Ý³¤¶È
-*	·µ »Ø Öµ: 16Î»ÕûÊýÖµ¡£ ¶ÔÓÚModbus £¬´Ë½á¹û¸ß×Ö½ÚÏÈ´«ËÍ£¬µÍ×Ö½Úºó´«ËÍ¡£
+*	å‡½ æ•° å: CRC16Modbus
+*	åŠŸèƒ½è¯´æ˜Ž: è®¡ç®—CRCã€‚ ç”¨äºŽModbusåè®®ã€‚
+*	å½¢    å‚: pucBuf : å‚ä¸Žæ ¡éªŒçš„æ•°æ®
+*			  _usLen : æ•°æ®é•¿åº¦
+*	è¿” å›ž å€¼: 16ä½æ•´æ•°å€¼ã€‚ å¯¹äºŽModbus ï¼Œæ­¤ç»“æžœé«˜å­—èŠ‚å…ˆä¼ é€ï¼Œä½Žå­—èŠ‚åŽä¼ é€ã€‚
 *
-*   ËùÓÐ¿ÉÄÜµÄCRCÖµ¶¼±»Ô¤×°ÔÚÁ½¸öÊý×éµ±ÖÐ£¬µ±¼ÆËã±¨ÎÄÄÚÈÝÊ±¿ÉÒÔ¼òµ¥µÄË÷Òý¼´¿É£»
-*   Ò»¸öÊý×é°üº¬ÓÐ16Î»CRCÓòµÄËùÓÐ256¸ö¿ÉÄÜµÄ¸ßÎ»×Ö½Ú£¬ÁíÒ»¸öÊý×éº¬ÓÐµÍÎ»×Ö½ÚµÄÖµ£»
-*   ÕâÖÖË÷Òý·ÃÎÊCRCµÄ·½Ê½Ìá¹©ÁË±È¶Ô±¨ÎÄ»º³åÇøµÄÃ¿Ò»¸öÐÂ×Ö·û¶¼¼ÆËãÐÂµÄCRC¸ü¿ìµÄ·½·¨£»
+*   æ‰€æœ‰å¯èƒ½çš„CRCå€¼éƒ½è¢«é¢„è£…åœ¨ä¸¤ä¸ªæ•°ç»„å½“ä¸­ï¼Œå½“è®¡ç®—æŠ¥æ–‡å†…å®¹æ—¶å¯ä»¥ç®€å•çš„ç´¢å¼•å³å¯ï¼›
+*   ä¸€ä¸ªæ•°ç»„åŒ…å«æœ‰16ä½CRCåŸŸçš„æ‰€æœ‰256ä¸ªå¯èƒ½çš„é«˜ä½å­—èŠ‚ï¼Œå¦ä¸€ä¸ªæ•°ç»„å«æœ‰ä½Žä½å­—èŠ‚çš„å€¼ï¼›
+*   è¿™ç§ç´¢å¼•è®¿é—®CRCçš„æ–¹å¼æä¾›äº†æ¯”å¯¹æŠ¥æ–‡ç¼“å†²åŒºçš„æ¯ä¸€ä¸ªæ–°å­—ç¬¦éƒ½è®¡ç®—æ–°çš„CRCæ›´å¿«çš„æ–¹æ³•ï¼›
 *
-*  ×¢Òâ£º´Ë³ÌÐòÄÚ²¿Ö´ÐÐ¸ß/µÍCRC×Ö½ÚµÄ½»»»¡£´Ëº¯Êý·µ»ØµÄÊÇÒÑ¾­¾­¹ý½»»»µÄCRCÖµ£»Ò²¾ÍÊÇËµ£¬¸Ãº¯ÊýµÄ·µ»ØÖµ¿ÉÒÔÖ±½Ó·ÅÖÃ
-*        ÓÚ±¨ÎÄÓÃÓÚ·¢ËÍ£»
+*  æ³¨æ„ï¼šæ­¤ç¨‹åºå†…éƒ¨æ‰§è¡Œé«˜/ä½ŽCRCå­—èŠ‚çš„äº¤æ¢ã€‚æ­¤å‡½æ•°è¿”å›žçš„æ˜¯å·²ç»ç»è¿‡äº¤æ¢çš„CRCå€¼ï¼›ä¹Ÿå°±æ˜¯è¯´ï¼Œè¯¥å‡½æ•°çš„è¿”å›žå€¼å¯ä»¥ç›´æŽ¥æ”¾ç½®
+*        äºŽæŠ¥æ–‡ç”¨äºŽå‘é€ï¼›
 *********************************************************************************************************
 */
 static uint16_t CRC16Modbus(uint8_t *pucBuf, uint16_t _usLen)
 {
-	uint8_t ucCRCHi = 0xFF; /* ¸ßCRC×Ö½Ú³õÊ¼»¯ */
-	uint8_t ucCRCLo = 0xFF; /* µÍCRC ×Ö½Ú³õÊ¼»¯ */
-	uint16_t usIndex;		/* CRCÑ­»·ÖÐµÄË÷Òý */
+	uint8_t ucCRCHi = 0xFF; /* é«˜CRCå­—èŠ‚åˆå§‹åŒ– */
+	uint8_t ucCRCLo = 0xFF; /* ä½ŽCRC å­—èŠ‚åˆå§‹åŒ– */
+	uint16_t usIndex;		/* CRCå¾ªçŽ¯ä¸­çš„ç´¢å¼• */
 
 	while (_usLen--)
 	{
-		usIndex = ucCRCHi ^ *pucBuf++; /* ¼ÆËãCRC */
+		usIndex = ucCRCHi ^ *pucBuf++; /* è®¡ç®—CRC */
 		ucCRCHi = ucCRCLo ^ s_CRCHi[usIndex];
 		ucCRCLo = s_CRCLo[usIndex];
 	}
 	return ((uint16_t)ucCRCHi << 8 | ucCRCLo);
-	/************************Ê±¼ä»»¿Õ¼ä********************************/
+	/************************æ—¶é—´æ¢ç©ºé—´********************************/
 	// uint8_t i;
 	// uint16_t crc = 0xffff;
 	// if (_usLen == 0)
@@ -122,12 +122,12 @@ static uint16_t CRC16Modbus(uint8_t *pucBuf, uint16_t _usLen)
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: BEBufToUint16
-*	¹¦ÄÜËµÃ÷: ½«2×Ö½ÚÊý×é(´ó¶ËBig Endian´ÎÐò£¬¸ß×Ö½ÚÔÚÇ°)×ª»»Îª16Î»ÕûÊý
-*	ÐÎ    ²Î: pucBuf : Êý×é
-*	·µ »Ø Öµ: 16Î»ÕûÊýÖµ
+*	å‡½ æ•° å: BEBufToUint16
+*	åŠŸèƒ½è¯´æ˜Ž: å°†2å­—èŠ‚æ•°ç»„(å¤§ç«¯Big Endianæ¬¡åºï¼Œé«˜å­—èŠ‚åœ¨å‰)è½¬æ¢ä¸º16ä½æ•´æ•°
+*	å½¢    å‚: pucBuf : æ•°ç»„
+*	è¿” å›ž å€¼: 16ä½æ•´æ•°å€¼
 *
-*   ´ó¶Ë(Big Endian)ÓëÐ¡¶Ë(Little Endian)
+*   å¤§ç«¯(Big Endian)ä¸Žå°ç«¯(Little Endian)
 *********************************************************************************************************
 */
 static uint16_t BEBufToUint16(uint8_t *pucBuf)
@@ -163,38 +163,38 @@ __WEAK uint8_t ModbusSlavePollCallBack(ModbusSlave_t *pxModbusSlave)
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlavePoll
-*	¹¦ÄÜËµÃ÷: ½âÎöÊý¾Ý°ü. ÔÚÖ÷³ÌÐòÖÐÂÖÁ÷µ÷ÓÃ¡£
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlavePoll
+*	åŠŸèƒ½è¯´æ˜Ž: è§£æžæ•°æ®åŒ…. åœ¨ä¸»ç¨‹åºä¸­è½®æµè°ƒç”¨ã€‚
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 void ModbusSlavePoll(ModbusSlave_t *pxModbusSlave)
 {
 	pxModbusSlave->pxModbusBase->pucRead(pxModbusSlave->pxModbusBase, NULL, NULL);
 	if (pxModbusSlave->pxModbusBase->pucRXBuf[0] != 0 &&
-		pxModbusSlave->pxModbusBase->pucRXBuf[0] != pxModbusSlave->pxModbusBase->ucAddr) /* ÅÐ¶ÏÖ÷»ú·¢ËÍµÄÃüÁîµØÖ·ÊÇ·ñ·ûºÏ */
+		pxModbusSlave->pxModbusBase->pucRXBuf[0] != pxModbusSlave->pxModbusBase->ucAddr) /* åˆ¤æ–­ä¸»æœºå‘é€çš„å‘½ä»¤åœ°å€æ˜¯å¦ç¬¦åˆ */
 		goto err_ret;
-	if (pxModbusSlave->pxModbusBase->usRXCnt < 4) /* ÅÐ¶ÏÖ÷»ú·¢ËÍÊý¾ÝÐ¡ÓÚ4¸ö×Ö½Ú¾ÍÈÏÎª´íÎó */
+	if (pxModbusSlave->pxModbusBase->usRXCnt < 4) /* åˆ¤æ–­ä¸»æœºå‘é€æ•°æ®å°äºŽ4ä¸ªå­—èŠ‚å°±è®¤ä¸ºé”™è¯¯ */
 		goto err_ret;
-	/* ¼ÆËãCRCÐ£ÑéºÍ */
+	/* è®¡ç®—CRCæ ¡éªŒå’Œ */
 	if (CRC16Modbus(pxModbusSlave->pxModbusBase->pucRXBuf, pxModbusSlave->pxModbusBase->usRXCnt) != 0)
 		goto err_ret;
-	if (ModbusSlavePollCallBack(pxModbusSlave) != 0) //´Ë´¦Áô¸øÓÃ»§½øÐÐÆäËûµÄÌØÊâµÄ²Ù×÷
+	if (ModbusSlavePollCallBack(pxModbusSlave) != 0) //æ­¤å¤„ç•™ç»™ç”¨æˆ·è¿›è¡Œå…¶ä»–çš„ç‰¹æ®Šçš„æ“ä½œ
 		goto err_ret;
-	/* ·ÖÎöÓ¦ÓÃ²ãÐ­Òé */
+	/* åˆ†æžåº”ç”¨å±‚åè®® */
 	ModbusSlaveAnalyzeApp(pxModbusSlave);
 err_ret:
-	pxModbusSlave->pxModbusBase->usRXCnt = 0; /* ±ØÐëÇåÁã¼ÆÊýÆ÷£¬·½±ãÏÂ´ÎÖ¡Í¬²½ */
+	pxModbusSlave->pxModbusBase->usRXCnt = 0; /* å¿…é¡»æ¸…é›¶è®¡æ•°å™¨ï¼Œæ–¹ä¾¿ä¸‹æ¬¡å¸§åŒæ­¥ */
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlaveSendWithCRC
-*	¹¦ÄÜËµÃ÷: ·¢ËÍÒ»´®Êý¾Ý, ×Ô¶¯×·¼Ó2×Ö½ÚCRC
-*	ÐÎ    ²Î: pucBuf Êý¾Ý£»
-*			  ucLen Êý¾Ý³¤¶È£¨²»´øCRC£©
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlaveSendWithCRC
+*	åŠŸèƒ½è¯´æ˜Ž: å‘é€ä¸€ä¸²æ•°æ®, è‡ªåŠ¨è¿½åŠ 2å­—èŠ‚CRC
+*	å½¢    å‚: pucBuf æ•°æ®ï¼›
+*			  ucLen æ•°æ®é•¿åº¦ï¼ˆä¸å¸¦CRCï¼‰
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlaveSendWithCRC(ModbusSlave_t *pxModbusSlave, uint8_t *pucBuf, uint16_t ucLen)
@@ -210,27 +210,27 @@ static void ModbusSlaveSendWithCRC(ModbusSlave_t *pxModbusSlave, uint8_t *pucBuf
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlaveSendAckErr
-*	¹¦ÄÜËµÃ÷: ·¢ËÍ´íÎóÓ¦´ð
-*	ÐÎ    ²Î: _ucErrCode : ´íÎó´úÂë
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlaveSendAckErr
+*	åŠŸèƒ½è¯´æ˜Ž: å‘é€é”™è¯¯åº”ç­”
+*	å½¢    å‚: _ucErrCode : é”™è¯¯ä»£ç 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlaveSendAckErr(ModbusSlave_t *pxModbusSlave)
 {
 	uint8_t ucTXBuf[3];
-	ucTXBuf[0] = pxModbusSlave->pxModbusBase->pucRXBuf[0];		  /* 485µØÖ· */
-	ucTXBuf[1] = pxModbusSlave->pxModbusBase->pucRXBuf[1] | 0x80; /* Òì³£µÄ¹¦ÄÜÂë */
-	ucTXBuf[2] = pxModbusSlave->ucRspCode;						  /* ´íÎó´úÂë(01,02,03,04) */
+	ucTXBuf[0] = pxModbusSlave->pxModbusBase->pucRXBuf[0];		  /* 485åœ°å€ */
+	ucTXBuf[1] = pxModbusSlave->pxModbusBase->pucRXBuf[1] | 0x80; /* å¼‚å¸¸çš„åŠŸèƒ½ç  */
+	ucTXBuf[2] = pxModbusSlave->ucRspCode;						  /* é”™è¯¯ä»£ç (01,02,03,04) */
 	ModbusSlaveSendWithCRC(pxModbusSlave, ucTXBuf, 3);
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlaveSendAckOk
-*	¹¦ÄÜËµÃ÷: ·¢ËÍÕýÈ·µÄÓ¦´ð.
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlaveSendAckOk
+*	åŠŸèƒ½è¯´æ˜Ž: å‘é€æ­£ç¡®çš„åº”ç­”.
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlaveSendAckOk(ModbusSlave_t *pxModbusSlave)
@@ -242,40 +242,40 @@ static void ModbusSlaveSendAckOk(ModbusSlave_t *pxModbusSlave)
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlaveAnalyzeApp
-*	¹¦ÄÜËµÃ÷: ·ÖÎöÓ¦ÓÃ²ãÐ­Òé
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlaveAnalyzeApp
+*	åŠŸèƒ½è¯´æ˜Ž: åˆ†æžåº”ç”¨å±‚åè®®
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlaveAnalyzeApp(ModbusSlave_t *pxModbusSlave)
 {
-	switch (pxModbusSlave->pxModbusBase->pucRXBuf[1]) /* µÚ2¸ö×Ö½Ú ¹¦ÄÜÂë */
+	switch (pxModbusSlave->pxModbusBase->pucRXBuf[1]) /* ç¬¬2ä¸ªå­—èŠ‚ åŠŸèƒ½ç  */
 	{
-	case 0x01: /* ¶ÁÈ¡ÏßÈ¦×´Ì¬£¨´ËÀý³ÌÓÃled´úÌæ£©*/
+	case 0x01: /* è¯»å–çº¿åœˆçŠ¶æ€ï¼ˆæ­¤ä¾‹ç¨‹ç”¨ledä»£æ›¿ï¼‰*/
 		ModbusSlave01H(pxModbusSlave);
 		break;
-	case 0x02: /* ¶ÁÈ¡ÊäÈë×´Ì¬£¨°´¼ü×´Ì¬£©*/
+	case 0x02: /* è¯»å–è¾“å…¥çŠ¶æ€ï¼ˆæŒ‰é”®çŠ¶æ€ï¼‰*/
 		ModbusSlave02H(pxModbusSlave);
 		break;
-	case 0x03: /* ¶ÁÈ¡±£³Ö¼Ä´æÆ÷£¨´ËÀý³Ì´æÔÚg_tVarÖÐ£©*/
+	case 0x03: /* è¯»å–ä¿æŒå¯„å­˜å™¨ï¼ˆæ­¤ä¾‹ç¨‹å­˜åœ¨g_tVarä¸­ï¼‰*/
 		ModbusSlave03H(pxModbusSlave);
 		break;
-	case 0x04: /* ¶ÁÈ¡ÊäÈë¼Ä´æÆ÷£¨ADCµÄÖµ£©*/
+	case 0x04: /* è¯»å–è¾“å…¥å¯„å­˜å™¨ï¼ˆADCçš„å€¼ï¼‰*/
 		ModbusSlave04H(pxModbusSlave);
 		break;
-	case 0x05: /* Ç¿ÖÆµ¥ÏßÈ¦£¨ÉèÖÃled£©*/
+	case 0x05: /* å¼ºåˆ¶å•çº¿åœˆï¼ˆè®¾ç½®ledï¼‰*/
 		ModbusSlave05H(pxModbusSlave);
 		break;
-	case 0x06: /* Ð´µ¥¸ö±£´æ¼Ä´æÆ÷£¨´ËÀý³Ì¸ÄÐ´g_tVarÖÐµÄ²ÎÊý£©*/
+	case 0x06: /* å†™å•ä¸ªä¿å­˜å¯„å­˜å™¨ï¼ˆæ­¤ä¾‹ç¨‹æ”¹å†™g_tVarä¸­çš„å‚æ•°ï¼‰*/
 		ModbusSlave06H(pxModbusSlave);
 		break;
-	case 0x10: /* Ð´¶à¸ö±£´æ¼Ä´æÆ÷£¨´ËÀý³Ì´æÔÚg_tVarÖÐµÄ²ÎÊý£©*/
+	case 0x10: /* å†™å¤šä¸ªä¿å­˜å¯„å­˜å™¨ï¼ˆæ­¤ä¾‹ç¨‹å­˜åœ¨g_tVarä¸­çš„å‚æ•°ï¼‰*/
 		ModbusSlave10H(pxModbusSlave);
 		break;
 	default:
 		pxModbusSlave->ucRspCode = RSP_ERR_CMD;
-		ModbusSlaveSendAckErr(pxModbusSlave); /* ¸æËßÖ÷»úÃüÁî´íÎó */
+		ModbusSlaveSendAckErr(pxModbusSlave); /* å‘Šè¯‰ä¸»æœºå‘½ä»¤é”™è¯¯ */
 		break;
 	}
 }
@@ -289,11 +289,11 @@ static uint8_t ModbusSlave02CallBack(ModbusSlave_t *pxModbusSlave, uint16_t usAd
 }
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlave03HCallBack
-*	¹¦ÄÜËµÃ÷: ¶ÁÈ¡±£³Ö¼Ä´æÆ÷µÄÖµ
-*	ÐÎ    ²Î: reg_addr ¼Ä´æÆ÷µØÖ·
-*			  reg_value ´æ·Å¼Ä´æÆ÷½á¹û
-*	·µ »Ø Öµ: 1±íÊ¾OK 0±íÊ¾´íÎó
+*	å‡½ æ•° å: ModbusSlave03HCallBack
+*	åŠŸèƒ½è¯´æ˜Ž: è¯»å–ä¿æŒå¯„å­˜å™¨çš„å€¼
+*	å½¢    å‚: reg_addr å¯„å­˜å™¨åœ°å€
+*			  reg_value å­˜æ”¾å¯„å­˜å™¨ç»“æžœ
+*	è¿” å›ž å€¼: 1è¡¨ç¤ºOK 0è¡¨ç¤ºé”™è¯¯
 *********************************************************************************************************
 */
 static uint8_t ModbusSlave03HCallBack(ModbusSlave_t *pxModbusSlave, uint16_t reg_addr, uint16_t *reg_value, uint16_t usLen)
@@ -328,11 +328,11 @@ static uint8_t ModbusSlave04HCallBack(ModbusSlave_t *pxModbusSlave, uint16_t reg
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlave06H10HCallBack
-*	¹¦ÄÜËµÃ÷: ¶ÁÈ¡±£³Ö¼Ä´æÆ÷µÄÖµ
-*	ÐÎ    ²Î: reg_addr ¼Ä´æÆ÷µØÖ·
-*			  reg_value ¼Ä´æÆ÷Öµ
-*	·µ »Ø Öµ: 1±íÊ¾OK 0±íÊ¾´íÎó
+*	å‡½ æ•° å: ModbusSlave06H10HCallBack
+*	åŠŸèƒ½è¯´æ˜Ž: è¯»å–ä¿æŒå¯„å­˜å™¨çš„å€¼
+*	å½¢    å‚: reg_addr å¯„å­˜å™¨åœ°å€
+*			  reg_value å¯„å­˜å™¨å€¼
+*	è¿” å›ž å€¼: 1è¡¨ç¤ºOK 0è¡¨ç¤ºé”™è¯¯
 *********************************************************************************************************
 */
 
@@ -351,40 +351,40 @@ static uint8_t ModbusSlave06H10HCallBack(ModbusSlave_t *pxModbusSlave, uint16_t 
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlave01H
-*	¹¦ÄÜËµÃ÷: ¶ÁÈ¡ÏßÈ¦×´Ì¬£¨¶ÔÓ¦Ô¶³Ì¿ª¹ØD01/D02/D03£©
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlave01H
+*	åŠŸèƒ½è¯´æ˜Ž: è¯»å–çº¿åœˆçŠ¶æ€ï¼ˆå¯¹åº”è¿œç¨‹å¼€å…³D01/D02/D03ï¼‰
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
-/* ËµÃ÷:ÕâÀïÓÃLED´úÌæ¼ÌµçÆ÷,±ãÓÚ¹Û²ìÏÖÏó */
+/* è¯´æ˜Ž:è¿™é‡Œç”¨LEDä»£æ›¿ç»§ç”µå™¨,ä¾¿äºŽè§‚å¯ŸçŽ°è±¡ */
 static void ModbusSlave01H(ModbusSlave_t *pxModbusSlave)
 {
 	/*
-	 ¾ÙÀý£º
-		Ö÷»ú·¢ËÍ:
-			11 ´Ó»úµØÖ·
-			01 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷ÆðÊ¼µØÖ·¸ß×Ö½Ú
-			13 ¼Ä´æÆ÷ÆðÊ¼µØÖ·µÍ×Ö½Ú
-			00 ¼Ä´æÆ÷ÊýÁ¿¸ß×Ö½Ú
-			25 ¼Ä´æÆ÷ÊýÁ¿µÍ×Ö½Ú
-			0E CRCÐ£Ñé¸ß×Ö½Ú
-			84 CRCÐ£ÑéµÍ×Ö½Ú
-		´Ó»úÓ¦´ð: 	1´ú±íON£¬0´ú±íOFF¡£Èô·µ»ØµÄÏßÈ¦Êý²»Îª8µÄ±¶Êý£¬ÔòÔÚ×îºóÊý¾Ý×Ö½ÚÎ´Î²Ê¹ÓÃ0´úÌæ. BIT0¶ÔÓ¦µÚ1¸ö
-			11 ´Ó»úµØÖ·
-			01 ¹¦ÄÜÂë
-			05 ·µ»Ø×Ö½ÚÊý
-			CD Êý¾Ý1(ÏßÈ¦0013H-ÏßÈ¦001AH)
-			6B Êý¾Ý2(ÏßÈ¦001BH-ÏßÈ¦0022H)
-			B2 Êý¾Ý3(ÏßÈ¦0023H-ÏßÈ¦002AH)
-			0E Êý¾Ý4(ÏßÈ¦0032H-ÏßÈ¦002BH)
-			1B Êý¾Ý5(ÏßÈ¦0037H-ÏßÈ¦0033H)
-			45 CRCÐ£Ñé¸ß×Ö½Ú
-			E6 CRCÐ£ÑéµÍ×Ö½Ú
-		Àý×Ó:
-			01 01 10 01 00 03   29 0B	--- ²éÑ¯D01¿ªÊ¼µÄ3¸ö¼ÌµçÆ÷×´Ì¬
-			01 01 10 03 00 01   09 0A   --- ²éÑ¯D03¼ÌµçÆ÷µÄ×´Ì¬
+	 ä¸¾ä¾‹ï¼š
+		ä¸»æœºå‘é€:
+			11 ä»Žæœºåœ°å€
+			01 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨èµ·å§‹åœ°å€é«˜å­—èŠ‚
+			13 å¯„å­˜å™¨èµ·å§‹åœ°å€ä½Žå­—èŠ‚
+			00 å¯„å­˜å™¨æ•°é‡é«˜å­—èŠ‚
+			25 å¯„å­˜å™¨æ•°é‡ä½Žå­—èŠ‚
+			0E CRCæ ¡éªŒé«˜å­—èŠ‚
+			84 CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä»Žæœºåº”ç­”: 	1ä»£è¡¨ONï¼Œ0ä»£è¡¨OFFã€‚è‹¥è¿”å›žçš„çº¿åœˆæ•°ä¸ä¸º8çš„å€æ•°ï¼Œåˆ™åœ¨æœ€åŽæ•°æ®å­—èŠ‚æœªå°¾ä½¿ç”¨0ä»£æ›¿. BIT0å¯¹åº”ç¬¬1ä¸ª
+			11 ä»Žæœºåœ°å€
+			01 åŠŸèƒ½ç 
+			05 è¿”å›žå­—èŠ‚æ•°
+			CD æ•°æ®1(çº¿åœˆ0013H-çº¿åœˆ001AH)
+			6B æ•°æ®2(çº¿åœˆ001BH-çº¿åœˆ0022H)
+			B2 æ•°æ®3(çº¿åœˆ0023H-çº¿åœˆ002AH)
+			0E æ•°æ®4(çº¿åœˆ0032H-çº¿åœˆ002BH)
+			1B æ•°æ®5(çº¿åœˆ0037H-çº¿åœˆ0033H)
+			45 CRCæ ¡éªŒé«˜å­—èŠ‚
+			E6 CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä¾‹å­:
+			01 01 10 01 00 03   29 0B	--- æŸ¥è¯¢D01å¼€å§‹çš„3ä¸ªç»§ç”µå™¨çŠ¶æ€
+			01 01 10 03 00 01   09 0A   --- æŸ¥è¯¢D03ç»§ç”µå™¨çš„çŠ¶æ€
 	*/
 	uint16_t reg;
 	uint16_t num;
@@ -394,15 +394,15 @@ static void ModbusSlave01H(ModbusSlave_t *pxModbusSlave)
 
 	pxModbusSlave->ucRspCode = RSP_OK;
 
-	/* Ã»ÓÐÍâ²¿¼ÌµçÆ÷£¬Ö±½ÓÓ¦´ð´íÎó */
+	/* æ²¡æœ‰å¤–éƒ¨ç»§ç”µå™¨ï¼Œç›´æŽ¥åº”ç­”é”™è¯¯ */
 	if (pxModbusSlave->pxModbusBase->usRXCnt != 8)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		return;
 	}
 
-	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* ¼Ä´æÆ÷ºÅ */
-	num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* ¼Ä´æÆ÷¸öÊý */
+	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* å¯„å­˜å™¨å· */
+	num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* å¯„å­˜å™¨ä¸ªæ•° */
 
 	m = (num + 7) / 8;
 
@@ -417,62 +417,62 @@ static void ModbusSlave01H(ModbusSlave_t *pxModbusSlave)
 	}
 	else
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_REG_ADDR; /* ¼Ä´æÆ÷µØÖ·´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_REG_ADDR; /* å¯„å­˜å™¨åœ°å€é”™è¯¯ */
 	}
 
-	if (pxModbusSlave->ucRspCode == RSP_OK) /* ÕýÈ·Ó¦´ð */
+	if (pxModbusSlave->ucRspCode == RSP_OK) /* æ­£ç¡®åº”ç­” */
 	{
 		pxModbusSlave->pxModbusBase->usTXCnt = 0;
 		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = pxModbusSlave->pxModbusBase->pucRXBuf[0];
 		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = pxModbusSlave->pxModbusBase->pucRXBuf[1];
-		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = m; /* ·µ»Ø×Ö½ÚÊý */
+		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = m; /* è¿”å›žå­—èŠ‚æ•° */
 
 		for (i = 0; i < m; i++)
-			pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = status[i]; /* ¼ÌµçÆ÷×´Ì¬ */
+			pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = status[i]; /* ç»§ç”µå™¨çŠ¶æ€ */
 		ModbusSlaveSendWithCRC(pxModbusSlave, pxModbusSlave->pxModbusBase->pucTXBuf, pxModbusSlave->pxModbusBase->usTXCnt);
 	}
 	else
 	{
-		ModbusSlaveSendAckErr(pxModbusSlave); /* ¸æËßÖ÷»úÃüÁî´íÎó */
+		ModbusSlaveSendAckErr(pxModbusSlave); /* å‘Šè¯‰ä¸»æœºå‘½ä»¤é”™è¯¯ */
 	}
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlave02H
-*	¹¦ÄÜËµÃ÷: ¶ÁÈ¡ÊäÈë×´Ì¬£¨¶ÔÓ¦K01¡«K03£©
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlave02H
+*	åŠŸèƒ½è¯´æ˜Ž: è¯»å–è¾“å…¥çŠ¶æ€ï¼ˆå¯¹åº”K01ï½žK03ï¼‰
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlave02H(ModbusSlave_t *pxModbusSlave)
 {
 	/*
-		Ö÷»ú·¢ËÍ:
-			11 ´Ó»úµØÖ·
-			02 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷µØÖ·¸ß×Ö½Ú
-			C4 ¼Ä´æÆ÷µØÖ·µÍ×Ö½Ú
-			00 ¼Ä´æÆ÷ÊýÁ¿¸ß×Ö½Ú
-			16 ¼Ä´æÆ÷ÊýÁ¿µÍ×Ö½Ú
-			BA CRCÐ£Ñé¸ß×Ö½Ú
-			A9 CRCÐ£ÑéµÍ×Ö½Ú
-		´Ó»úÓ¦´ð:  ÏìÓ¦¸÷ÀëÉ¢ÊäÈë¼Ä´æÆ÷×´Ì¬£¬·Ö±ð¶ÔÓ¦Êý¾ÝÇøÖÐµÄÃ¿Î»Öµ£¬1 ´ú±íON£»0 ´ú±íOFF¡£
-		           µÚÒ»¸öÊý¾Ý×Ö½ÚµÄLSB(×îµÍ×Ö½Ú)Îª²éÑ¯µÄÑ°Ö·µØÖ·£¬ÆäËûÊäÈë¿Ú°´Ë³ÐòÔÚ¸Ã×Ö½ÚÖÐÓÉµÍ×Ö½Ú
-		           Ïò¸ß×Ö½ÚÅÅÁÐ£¬Ö±µ½Ìî³äÂú8Î»¡£ÏÂÒ»¸ö×Ö½ÚÖÐµÄ8¸öÊäÈëÎ»Ò²ÊÇ´ÓµÍ×Ö½Úµ½¸ß×Ö½ÚÅÅÁÐ¡£
-		           Èô·µ»ØµÄÊäÈëÎ»Êý²»ÊÇ8µÄ±¶Êý£¬ÔòÔÚ×îºóµÄÊý¾Ý×Ö½ÚÖÐµÄÊ£ÓàÎ»ÖÁ¸Ã×Ö½ÚµÄ×î¸ßÎ»Ê¹ÓÃ0Ìî³ä¡£
-			11 ´Ó»úµØÖ·
-			02 ¹¦ÄÜÂë
-			03 ·µ»Ø×Ö½ÚÊý
-			AC Êý¾Ý1(00C4H-00CBH)
-			DB Êý¾Ý2(00CCH-00D3H)
-			35 Êý¾Ý3(00D4H-00D9H)
-			20 CRCÐ£Ñé¸ß×Ö½Ú
-			18 CRCÐ£ÑéµÍ×Ö½Ú
-		Àý×Ó:
-		01 02 20 01 00 08  23CC  ---- ¶ÁÈ¡T01-08µÄ×´Ì¬
-		01 02 20 04 00 02  B3CA  ---- ¶ÁÈ¡T04-05µÄ×´Ì¬
-		01 02 20 01 00 12  A207   ---- ¶Á T01-18
+		ä¸»æœºå‘é€:
+			11 ä»Žæœºåœ°å€
+			02 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨åœ°å€é«˜å­—èŠ‚
+			C4 å¯„å­˜å™¨åœ°å€ä½Žå­—èŠ‚
+			00 å¯„å­˜å™¨æ•°é‡é«˜å­—èŠ‚
+			16 å¯„å­˜å™¨æ•°é‡ä½Žå­—èŠ‚
+			BA CRCæ ¡éªŒé«˜å­—èŠ‚
+			A9 CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä»Žæœºåº”ç­”:  å“åº”å„ç¦»æ•£è¾“å…¥å¯„å­˜å™¨çŠ¶æ€ï¼Œåˆ†åˆ«å¯¹åº”æ•°æ®åŒºä¸­çš„æ¯ä½å€¼ï¼Œ1 ä»£è¡¨ONï¼›0 ä»£è¡¨OFFã€‚
+		           ç¬¬ä¸€ä¸ªæ•°æ®å­—èŠ‚çš„LSB(æœ€ä½Žå­—èŠ‚)ä¸ºæŸ¥è¯¢çš„å¯»å€åœ°å€ï¼Œå…¶ä»–è¾“å…¥å£æŒ‰é¡ºåºåœ¨è¯¥å­—èŠ‚ä¸­ç”±ä½Žå­—èŠ‚
+		           å‘é«˜å­—èŠ‚æŽ’åˆ—ï¼Œç›´åˆ°å¡«å……æ»¡8ä½ã€‚ä¸‹ä¸€ä¸ªå­—èŠ‚ä¸­çš„8ä¸ªè¾“å…¥ä½ä¹Ÿæ˜¯ä»Žä½Žå­—èŠ‚åˆ°é«˜å­—èŠ‚æŽ’åˆ—ã€‚
+		           è‹¥è¿”å›žçš„è¾“å…¥ä½æ•°ä¸æ˜¯8çš„å€æ•°ï¼Œåˆ™åœ¨æœ€åŽçš„æ•°æ®å­—èŠ‚ä¸­çš„å‰©ä½™ä½è‡³è¯¥å­—èŠ‚çš„æœ€é«˜ä½ä½¿ç”¨0å¡«å……ã€‚
+			11 ä»Žæœºåœ°å€
+			02 åŠŸèƒ½ç 
+			03 è¿”å›žå­—èŠ‚æ•°
+			AC æ•°æ®1(00C4H-00CBH)
+			DB æ•°æ®2(00CCH-00D3H)
+			35 æ•°æ®3(00D4H-00D9H)
+			20 CRCæ ¡éªŒé«˜å­—èŠ‚
+			18 CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä¾‹å­:
+		01 02 20 01 00 08  23CC  ---- è¯»å–T01-08çš„çŠ¶æ€
+		01 02 20 04 00 02  B3CA  ---- è¯»å–T04-05çš„çŠ¶æ€
+		01 02 20 01 00 12  A207   ---- è¯» T01-18
 	*/
 	uint16_t reg;
 	uint16_t num;
@@ -484,12 +484,12 @@ static void ModbusSlave02H(ModbusSlave_t *pxModbusSlave)
 
 	if (pxModbusSlave->pxModbusBase->usRXCnt != 8)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		return;
 	}
 
-	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* ¼Ä´æÆ÷ºÅ */
-	num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* ¼Ä´æÆ÷¸öÊý */
+	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* å¯„å­˜å™¨å· */
+	num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* å¯„å­˜å™¨ä¸ªæ•° */
 
 	m = (num + 7) / 8;
 	if ((reg >= pxModbusSlave->pxModbusBase->usDiscInStartAddr) && (num > 0) && (reg + num <= pxModbusSlave->pxModbusBase->usDiscInStartAddr + pxModbusSlave->pxModbusBase->usDiscInSize))
@@ -503,69 +503,69 @@ static void ModbusSlave02H(ModbusSlave_t *pxModbusSlave)
 	}
 	else
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_REG_ADDR; /* ¼Ä´æÆ÷µØÖ·´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_REG_ADDR; /* å¯„å­˜å™¨åœ°å€é”™è¯¯ */
 	}
 
-	if (pxModbusSlave->ucRspCode == RSP_OK) /* ÕýÈ·Ó¦´ð */
+	if (pxModbusSlave->ucRspCode == RSP_OK) /* æ­£ç¡®åº”ç­” */
 	{
 		pxModbusSlave->pxModbusBase->usTXCnt = 0;
 		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = pxModbusSlave->pxModbusBase->pucRXBuf[0];
 		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = pxModbusSlave->pxModbusBase->pucRXBuf[1];
-		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = m; /* ·µ»Ø×Ö½ÚÊý */
+		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = m; /* è¿”å›žå­—èŠ‚æ•° */
 
 		for (i = 0; i < m; i++)
-			pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = status[i]; /* T01-02×´Ì¬ */
+			pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = status[i]; /* T01-02çŠ¶æ€ */
 		ModbusSlaveSendWithCRC(pxModbusSlave, pxModbusSlave->pxModbusBase->pucTXBuf, pxModbusSlave->pxModbusBase->usTXCnt);
 	}
 	else
 	{
-		ModbusSlaveSendAckErr(pxModbusSlave); /* ¸æËßÖ÷»úÃüÁî´íÎó */
+		ModbusSlaveSendAckErr(pxModbusSlave); /* å‘Šè¯‰ä¸»æœºå‘½ä»¤é”™è¯¯ */
 	}
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlave03H
-*	¹¦ÄÜËµÃ÷: ¶ÁÈ¡±£³Ö¼Ä´æÆ÷ ÔÚÒ»¸ö»ò¶à¸ö±£³Ö¼Ä´æÆ÷ÖÐÈ¡µÃµ±Ç°µÄ¶þ½øÖÆÖµ
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlave03H
+*	åŠŸèƒ½è¯´æ˜Ž: è¯»å–ä¿æŒå¯„å­˜å™¨ åœ¨ä¸€ä¸ªæˆ–å¤šä¸ªä¿æŒå¯„å­˜å™¨ä¸­å–å¾—å½“å‰çš„äºŒè¿›åˆ¶å€¼
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlave03H(ModbusSlave_t *pxModbusSlave)
 {
 	/*
-		´Ó»úµØÖ·Îª11H¡£±£³Ö¼Ä´æÆ÷µÄÆðÊ¼µØÖ·Îª006BH£¬½áÊøµØÖ·Îª006DH¡£¸Ã´Î²éÑ¯×Ü¹²·ÃÎÊ3¸ö±£³Ö¼Ä´æÆ÷¡£
-		Ö÷»ú·¢ËÍ:
-			11 ´Ó»úµØÖ·
-			03 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷µØÖ·¸ß×Ö½Ú
-			6B ¼Ä´æÆ÷µØÖ·µÍ×Ö½Ú
-			00 ¼Ä´æÆ÷ÊýÁ¿¸ß×Ö½Ú
-			03 ¼Ä´æÆ÷ÊýÁ¿µÍ×Ö½Ú
-			76 CRC¸ß×Ö½Ú
-			87 CRCµÍ×Ö½Ú
-		´Ó»úÓ¦´ð: 	±£³Ö¼Ä´æÆ÷µÄ³¤¶ÈÎª2¸ö×Ö½Ú¡£¶ÔÓÚµ¥¸ö±£³Ö¼Ä´æÆ÷¶øÑÔ£¬¼Ä´æÆ÷¸ß×Ö½ÚÊý¾ÝÏÈ±»´«Êä£¬
-					µÍ×Ö½ÚÊý¾Ýºó±»´«Êä¡£±£³Ö¼Ä´æÆ÷Ö®¼ä£¬µÍµØÖ·¼Ä´æÆ÷ÏÈ±»´«Êä£¬¸ßµØÖ·¼Ä´æÆ÷ºó±»´«Êä¡£
-			11 ´Ó»úµØÖ·
-			03 ¹¦ÄÜÂë
-			06 ×Ö½ÚÊý
-			00 Êý¾Ý1¸ß×Ö½Ú(006BH)
-			6B Êý¾Ý1µÍ×Ö½Ú(006BH)
-			00 Êý¾Ý2¸ß×Ö½Ú(006CH)
-			13 Êý¾Ý2 µÍ×Ö½Ú(006CH)
-			00 Êý¾Ý3¸ß×Ö½Ú(006DH)
-			00 Êý¾Ý3µÍ×Ö½Ú(006DH)
-			38 CRC¸ß×Ö½Ú
-			B9 CRCµÍ×Ö½Ú
-		Àý×Ó:
-			01 03 30 06 00 01  6B0B      ---- ¶Á 3006H, ´¥·¢µçÁ÷
-			01 03 4000 0010 51C6         ---- ¶Á 4000H µ¹ÊýµÚ1ÌõÀËÓ¿¼ÇÂ¼ 32×Ö½Ú
-			01 03 4001 0010 0006         ---- ¶Á 4001H µ¹ÊýµÚ1ÌõÀËÓ¿¼ÇÂ¼ 32×Ö½Ú
-			01 03 F000 0008 770C         ---- ¶Á F000H µ¹ÊýµÚ1Ìõ¸æ¾¯¼ÇÂ¼ 16×Ö½Ú
-			01 03 F001 0008 26CC         ---- ¶Á F001H µ¹ÊýµÚ2Ìõ¸æ¾¯¼ÇÂ¼ 16×Ö½Ú
-			01 03 7000 0020 5ED2         ---- ¶Á 7000H µ¹ÊýµÚ1Ìõ²¨ÐÎ¼ÇÂ¼µÚ1¶Î 64×Ö½Ú
-			01 03 7001 0020 0F12         ---- ¶Á 7001H µ¹ÊýµÚ1Ìõ²¨ÐÎ¼ÇÂ¼µÚ2¶Î 64×Ö½Ú
-			01 03 7040 0020 5F06         ---- ¶Á 7040H µ¹ÊýµÚ2Ìõ²¨ÐÎ¼ÇÂ¼µÚ1¶Î 64×Ö½Ú
+		ä»Žæœºåœ°å€ä¸º11Hã€‚ä¿æŒå¯„å­˜å™¨çš„èµ·å§‹åœ°å€ä¸º006BHï¼Œç»“æŸåœ°å€ä¸º006DHã€‚è¯¥æ¬¡æŸ¥è¯¢æ€»å…±è®¿é—®3ä¸ªä¿æŒå¯„å­˜å™¨ã€‚
+		ä¸»æœºå‘é€:
+			11 ä»Žæœºåœ°å€
+			03 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨åœ°å€é«˜å­—èŠ‚
+			6B å¯„å­˜å™¨åœ°å€ä½Žå­—èŠ‚
+			00 å¯„å­˜å™¨æ•°é‡é«˜å­—èŠ‚
+			03 å¯„å­˜å™¨æ•°é‡ä½Žå­—èŠ‚
+			76 CRCé«˜å­—èŠ‚
+			87 CRCä½Žå­—èŠ‚
+		ä»Žæœºåº”ç­”: 	ä¿æŒå¯„å­˜å™¨çš„é•¿åº¦ä¸º2ä¸ªå­—èŠ‚ã€‚å¯¹äºŽå•ä¸ªä¿æŒå¯„å­˜å™¨è€Œè¨€ï¼Œå¯„å­˜å™¨é«˜å­—èŠ‚æ•°æ®å…ˆè¢«ä¼ è¾“ï¼Œ
+					ä½Žå­—èŠ‚æ•°æ®åŽè¢«ä¼ è¾“ã€‚ä¿æŒå¯„å­˜å™¨ä¹‹é—´ï¼Œä½Žåœ°å€å¯„å­˜å™¨å…ˆè¢«ä¼ è¾“ï¼Œé«˜åœ°å€å¯„å­˜å™¨åŽè¢«ä¼ è¾“ã€‚
+			11 ä»Žæœºåœ°å€
+			03 åŠŸèƒ½ç 
+			06 å­—èŠ‚æ•°
+			00 æ•°æ®1é«˜å­—èŠ‚(006BH)
+			6B æ•°æ®1ä½Žå­—èŠ‚(006BH)
+			00 æ•°æ®2é«˜å­—èŠ‚(006CH)
+			13 æ•°æ®2 ä½Žå­—èŠ‚(006CH)
+			00 æ•°æ®3é«˜å­—èŠ‚(006DH)
+			00 æ•°æ®3ä½Žå­—èŠ‚(006DH)
+			38 CRCé«˜å­—èŠ‚
+			B9 CRCä½Žå­—èŠ‚
+		ä¾‹å­:
+			01 03 30 06 00 01  6B0B      ---- è¯» 3006H, è§¦å‘ç”µæµ
+			01 03 4000 0010 51C6         ---- è¯» 4000H å€’æ•°ç¬¬1æ¡æµªæ¶Œè®°å½• 32å­—èŠ‚
+			01 03 4001 0010 0006         ---- è¯» 4001H å€’æ•°ç¬¬1æ¡æµªæ¶Œè®°å½• 32å­—èŠ‚
+			01 03 F000 0008 770C         ---- è¯» F000H å€’æ•°ç¬¬1æ¡å‘Šè­¦è®°å½• 16å­—èŠ‚
+			01 03 F001 0008 26CC         ---- è¯» F001H å€’æ•°ç¬¬2æ¡å‘Šè­¦è®°å½• 16å­—èŠ‚
+			01 03 7000 0020 5ED2         ---- è¯» 7000H å€’æ•°ç¬¬1æ¡æ³¢å½¢è®°å½•ç¬¬1æ®µ 64å­—èŠ‚
+			01 03 7001 0020 0F12         ---- è¯» 7001H å€’æ•°ç¬¬1æ¡æ³¢å½¢è®°å½•ç¬¬2æ®µ 64å­—èŠ‚
+			01 03 7040 0020 5F06         ---- è¯» 7040H å€’æ•°ç¬¬2æ¡æ³¢å½¢è®°å½•ç¬¬1æ®µ 64å­—èŠ‚
 	*/
 	uint16_t reg;
 	uint16_t num;
@@ -574,18 +574,18 @@ static void ModbusSlave03H(ModbusSlave_t *pxModbusSlave)
 
 	pxModbusSlave->ucRspCode = RSP_OK;
 
-	if (pxModbusSlave->pxModbusBase->usRXCnt != 8) /* 03HÃüÁî±ØÐëÊÇ8¸ö×Ö½Ú */
+	if (pxModbusSlave->pxModbusBase->usRXCnt != 8) /* 03Hå‘½ä»¤å¿…é¡»æ˜¯8ä¸ªå­—èŠ‚ */
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		goto err_ret;
 	}
 
-	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* ¼Ä´æÆ÷ºÅ */
-	num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* ¼Ä´æÆ÷¸öÊý */
+	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* å¯„å­˜å™¨å· */
+	num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* å¯„å­˜å™¨ä¸ªæ•° */
 
 	if (num > sizeof(reg_value) / 2)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		goto err_ret;
 	}
 
@@ -595,60 +595,60 @@ static void ModbusSlave03H(ModbusSlave_t *pxModbusSlave)
 	}
 
 err_ret:
-	if (pxModbusSlave->ucRspCode == RSP_OK) /* ÕýÈ·Ó¦´ð */
+	if (pxModbusSlave->ucRspCode == RSP_OK) /* æ­£ç¡®åº”ç­” */
 	{
 		pxModbusSlave->pxModbusBase->usTXCnt = 0;
 		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = pxModbusSlave->pxModbusBase->pucRXBuf[0];
 		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = pxModbusSlave->pxModbusBase->pucRXBuf[1];
-		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = num * 2; /* ·µ»Ø×Ö½ÚÊý */
+		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = num * 2; /* è¿”å›žå­—èŠ‚æ•° */
 
 		for (i = 0; i < num; i++)
 		{
 			pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = reg_value[2 * i];
 			pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = reg_value[2 * i + 1];
 		}
-		ModbusSlaveSendWithCRC(pxModbusSlave, pxModbusSlave->pxModbusBase->pucTXBuf, pxModbusSlave->pxModbusBase->usTXCnt); /* ·¢ËÍÕýÈ·Ó¦´ð */
+		ModbusSlaveSendWithCRC(pxModbusSlave, pxModbusSlave->pxModbusBase->pucTXBuf, pxModbusSlave->pxModbusBase->usTXCnt); /* å‘é€æ­£ç¡®åº”ç­” */
 	}
 	else
 	{
-		ModbusSlaveSendAckErr(pxModbusSlave); /* ·¢ËÍ´íÎóÓ¦´ð */
+		ModbusSlaveSendAckErr(pxModbusSlave); /* å‘é€é”™è¯¯åº”ç­” */
 	}
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlave04H
-*	¹¦ÄÜËµÃ÷: ¶ÁÈ¡ÊäÈë¼Ä´æÆ÷£¨¶ÔÓ¦A01/A02£© SMA
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlave04H
+*	åŠŸèƒ½è¯´æ˜Ž: è¯»å–è¾“å…¥å¯„å­˜å™¨ï¼ˆå¯¹åº”A01/A02ï¼‰ SMA
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlave04H(ModbusSlave_t *pxModbusSlave)
 {
 	/*
-		Ö÷»ú·¢ËÍ:
-			11 ´Ó»úµØÖ·
-			04 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷ÆðÊ¼µØÖ·¸ß×Ö½Ú
-			08 ¼Ä´æÆ÷ÆðÊ¼µØÖ·µÍ×Ö½Ú
-			00 ¼Ä´æÆ÷¸öÊý¸ß×Ö½Ú
-			02 ¼Ä´æÆ÷¸öÊýµÍ×Ö½Ú
-			F2 CRC¸ß×Ö½Ú
-			99 CRCµÍ×Ö½Ú
-		´Ó»úÓ¦´ð:  ÊäÈë¼Ä´æÆ÷³¤¶ÈÎª2¸ö×Ö½Ú¡£¶ÔÓÚµ¥¸öÊäÈë¼Ä´æÆ÷¶øÑÔ£¬¼Ä´æÆ÷¸ß×Ö½ÚÊý¾ÝÏÈ±»´«Êä£¬
-				µÍ×Ö½ÚÊý¾Ýºó±»´«Êä¡£ÊäÈë¼Ä´æÆ÷Ö®¼ä£¬µÍµØÖ·¼Ä´æÆ÷ÏÈ±»´«Êä£¬¸ßµØÖ·¼Ä´æÆ÷ºó±»´«Êä¡£
-			11 ´Ó»úµØÖ·
-			04 ¹¦ÄÜÂë
-			04 ×Ö½ÚÊý
-			00 Êý¾Ý1¸ß×Ö½Ú(0008H)
-			0A Êý¾Ý1µÍ×Ö½Ú(0008H)
-			00 Êý¾Ý2¸ß×Ö½Ú(0009H)
-			0B Êý¾Ý2µÍ×Ö½Ú(0009H)
-			8B CRC¸ß×Ö½Ú
-			80 CRCµÍ×Ö½Ú
-		Àý×Ó:
-			01 04 2201 0006 2BB0  --- ¶Á 2201H A01Í¨µÀÄ£ÄâÁ¿ ¿ªÊ¼µÄ6¸öÊý¾Ý
-			01 04 2201 0001 6A72  --- ¶Á 2201H
+		ä¸»æœºå‘é€:
+			11 ä»Žæœºåœ°å€
+			04 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨èµ·å§‹åœ°å€é«˜å­—èŠ‚
+			08 å¯„å­˜å™¨èµ·å§‹åœ°å€ä½Žå­—èŠ‚
+			00 å¯„å­˜å™¨ä¸ªæ•°é«˜å­—èŠ‚
+			02 å¯„å­˜å™¨ä¸ªæ•°ä½Žå­—èŠ‚
+			F2 CRCé«˜å­—èŠ‚
+			99 CRCä½Žå­—èŠ‚
+		ä»Žæœºåº”ç­”:  è¾“å…¥å¯„å­˜å™¨é•¿åº¦ä¸º2ä¸ªå­—èŠ‚ã€‚å¯¹äºŽå•ä¸ªè¾“å…¥å¯„å­˜å™¨è€Œè¨€ï¼Œå¯„å­˜å™¨é«˜å­—èŠ‚æ•°æ®å…ˆè¢«ä¼ è¾“ï¼Œ
+				ä½Žå­—èŠ‚æ•°æ®åŽè¢«ä¼ è¾“ã€‚è¾“å…¥å¯„å­˜å™¨ä¹‹é—´ï¼Œä½Žåœ°å€å¯„å­˜å™¨å…ˆè¢«ä¼ è¾“ï¼Œé«˜åœ°å€å¯„å­˜å™¨åŽè¢«ä¼ è¾“ã€‚
+			11 ä»Žæœºåœ°å€
+			04 åŠŸèƒ½ç 
+			04 å­—èŠ‚æ•°
+			00 æ•°æ®1é«˜å­—èŠ‚(0008H)
+			0A æ•°æ®1ä½Žå­—èŠ‚(0008H)
+			00 æ•°æ®2é«˜å­—èŠ‚(0009H)
+			0B æ•°æ®2ä½Žå­—èŠ‚(0009H)
+			8B CRCé«˜å­—èŠ‚
+			80 CRCä½Žå­—èŠ‚
+		ä¾‹å­:
+			01 04 2201 0006 2BB0  --- è¯» 2201H A01é€šé“æ¨¡æ‹Ÿé‡ å¼€å§‹çš„6ä¸ªæ•°æ®
+			01 04 2201 0001 6A72  --- è¯» 2201H
 	*/
 	uint16_t reg;
 	uint16_t num;
@@ -659,16 +659,16 @@ static void ModbusSlave04H(ModbusSlave_t *pxModbusSlave)
 
 	if (pxModbusSlave->pxModbusBase->usRXCnt != 8)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		goto err_ret;
 	}
 
-	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* ¼Ä´æÆ÷ºÅ */
-	num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* ¼Ä´æÆ÷¸öÊý */
+	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* å¯„å­˜å™¨å· */
+	num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* å¯„å­˜å™¨ä¸ªæ•° */
 
 	if (num > sizeof(status) / 2)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		goto err_ret;
 	}
 
@@ -678,12 +678,12 @@ static void ModbusSlave04H(ModbusSlave_t *pxModbusSlave)
 	}
 
 err_ret:
-	if (pxModbusSlave->ucRspCode == RSP_OK) /* ÕýÈ·Ó¦´ð */
+	if (pxModbusSlave->ucRspCode == RSP_OK) /* æ­£ç¡®åº”ç­” */
 	{
 		pxModbusSlave->pxModbusBase->usTXCnt = 0;
 		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = pxModbusSlave->pxModbusBase->pucRXBuf[0];
 		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = pxModbusSlave->pxModbusBase->pucRXBuf[1];
-		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = num * 2; /* ·µ»Ø×Ö½ÚÊý */
+		pxModbusSlave->pxModbusBase->pucTXBuf[pxModbusSlave->pxModbusBase->usTXCnt++] = num * 2; /* è¿”å›žå­—èŠ‚æ•° */
 
 		for (i = 0; i < num; i++)
 		{
@@ -694,47 +694,47 @@ err_ret:
 	}
 	else
 	{
-		ModbusSlaveSendAckErr(pxModbusSlave); /* ¸æËßÖ÷»úÃüÁî´íÎó */
+		ModbusSlaveSendAckErr(pxModbusSlave); /* å‘Šè¯‰ä¸»æœºå‘½ä»¤é”™è¯¯ */
 	}
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlave05H
-*	¹¦ÄÜËµÃ÷: Ç¿ÖÆµ¥ÏßÈ¦£¨¶ÔÓ¦D01/D02/D03£©
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlave05H
+*	åŠŸèƒ½è¯´æ˜Ž: å¼ºåˆ¶å•çº¿åœˆï¼ˆå¯¹åº”D01/D02/D03ï¼‰
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlave05H(ModbusSlave_t *pxModbusSlave)
 {
 	/*
-		Ö÷»ú·¢ËÍ: Ð´µ¥¸öÏßÈ¦¼Ä´æÆ÷¡£FF00HÖµÇëÇóÏßÈ¦´¦ÓÚON×´Ì¬£¬0000HÖµÇëÇóÏßÈ¦´¦ÓÚOFF×´Ì¬
-		¡£05HÖ¸ÁîÉèÖÃµ¥¸öÏßÈ¦µÄ×´Ì¬£¬15HÖ¸Áî¿ÉÒÔÉèÖÃ¶à¸öÏßÈ¦µÄ×´Ì¬¡£
-			11 ´Ó»úµØÖ·
-			05 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷µØÖ·¸ß×Ö½Ú
-			AC ¼Ä´æÆ÷µØÖ·µÍ×Ö½Ú
-			FF Êý¾Ý1¸ß×Ö½Ú
-			00 Êý¾Ý2µÍ×Ö½Ú
-			4E CRCÐ£Ñé¸ß×Ö½Ú
-			8B CRCÐ£ÑéµÍ×Ö½Ú
-		´Ó»úÓ¦´ð:
-			11 ´Ó»úµØÖ·
-			05 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷µØÖ·¸ß×Ö½Ú
-			AC ¼Ä´æÆ÷µØÖ·µÍ×Ö½Ú
-			FF ¼Ä´æÆ÷1¸ß×Ö½Ú
-			00 ¼Ä´æÆ÷1µÍ×Ö½Ú
-			4E CRCÐ£Ñé¸ß×Ö½Ú
-			8B CRCÐ£ÑéµÍ×Ö½Ú
-		Àý×Ó:
-		01 05 10 01 FF 00   D93A   -- D01´ò¿ª
-		01 05 10 01 00 00   98CA   -- D01¹Ø±Õ
-		01 05 10 02 FF 00   293A   -- D02´ò¿ª
-		01 05 10 02 00 00   68CA   -- D02¹Ø±Õ
-		01 05 10 03 FF 00   78FA   -- D03´ò¿ª
-		01 05 10 03 00 00   390A   -- D03¹Ø±Õ
+		ä¸»æœºå‘é€: å†™å•ä¸ªçº¿åœˆå¯„å­˜å™¨ã€‚FF00Hå€¼è¯·æ±‚çº¿åœˆå¤„äºŽONçŠ¶æ€ï¼Œ0000Hå€¼è¯·æ±‚çº¿åœˆå¤„äºŽOFFçŠ¶æ€
+		ã€‚05HæŒ‡ä»¤è®¾ç½®å•ä¸ªçº¿åœˆçš„çŠ¶æ€ï¼Œ15HæŒ‡ä»¤å¯ä»¥è®¾ç½®å¤šä¸ªçº¿åœˆçš„çŠ¶æ€ã€‚
+			11 ä»Žæœºåœ°å€
+			05 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨åœ°å€é«˜å­—èŠ‚
+			AC å¯„å­˜å™¨åœ°å€ä½Žå­—èŠ‚
+			FF æ•°æ®1é«˜å­—èŠ‚
+			00 æ•°æ®2ä½Žå­—èŠ‚
+			4E CRCæ ¡éªŒé«˜å­—èŠ‚
+			8B CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä»Žæœºåº”ç­”:
+			11 ä»Žæœºåœ°å€
+			05 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨åœ°å€é«˜å­—èŠ‚
+			AC å¯„å­˜å™¨åœ°å€ä½Žå­—èŠ‚
+			FF å¯„å­˜å™¨1é«˜å­—èŠ‚
+			00 å¯„å­˜å™¨1ä½Žå­—èŠ‚
+			4E CRCæ ¡éªŒé«˜å­—èŠ‚
+			8B CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä¾‹å­:
+		01 05 10 01 FF 00   D93A   -- D01æ‰“å¼€
+		01 05 10 01 00 00   98CA   -- D01å…³é—­
+		01 05 10 02 FF 00   293A   -- D02æ‰“å¼€
+		01 05 10 02 00 00   68CA   -- D02å…³é—­
+		01 05 10 03 FF 00   78FA   -- D03æ‰“å¼€
+		01 05 10 03 00 00   390A   -- D03å…³é—­
 	*/
 	uint16_t reg;
 	uint16_t value;
@@ -743,16 +743,16 @@ static void ModbusSlave05H(ModbusSlave_t *pxModbusSlave)
 
 	if (pxModbusSlave->pxModbusBase->usRXCnt != 8)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		goto err_ret;
 	}
 
-	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]);	  /* ¼Ä´æÆ÷ºÅ */
-	value = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* Êý¾Ý */
+	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]);	  /* å¯„å­˜å™¨å· */
+	value = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* æ•°æ® */
 
 	if (value != 0 && value != 1)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		goto err_ret;
 	}
 	if (reg >= pxModbusSlave->pxModbusBase->usCoilStartAddr && reg < (pxModbusSlave->pxModbusBase->usCoilStartAddr + pxModbusSlave->pxModbusBase->usCoilSize))
@@ -761,61 +761,61 @@ static void ModbusSlave05H(ModbusSlave_t *pxModbusSlave)
 	}
 	else
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_REG_ADDR; /* ¼Ä´æÆ÷µØÖ·´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_REG_ADDR; /* å¯„å­˜å™¨åœ°å€é”™è¯¯ */
 	}
 err_ret:
-	if (pxModbusSlave->ucRspCode == RSP_OK) /* ÕýÈ·Ó¦´ð */
+	if (pxModbusSlave->ucRspCode == RSP_OK) /* æ­£ç¡®åº”ç­” */
 	{
 		ModbusSlaveSendAckOk(pxModbusSlave);
 	}
 	else
 	{
-		ModbusSlaveSendAckErr(pxModbusSlave); /* ¸æËßÖ÷»úÃüÁî´íÎó */
+		ModbusSlaveSendAckErr(pxModbusSlave); /* å‘Šè¯‰ä¸»æœºå‘½ä»¤é”™è¯¯ */
 	}
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlave06H
-*	¹¦ÄÜËµÃ÷: Ð´µ¥¸ö¼Ä´æÆ÷
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlave06H
+*	åŠŸèƒ½è¯´æ˜Ž: å†™å•ä¸ªå¯„å­˜å™¨
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlave06H(ModbusSlave_t *pxModbusSlave)
 {
 
 	/*
-		Ð´±£³Ö¼Ä´æÆ÷¡£×¢Òâ06Ö¸ÁîÖ»ÄÜ²Ù×÷µ¥¸ö±£³Ö¼Ä´æÆ÷£¬16Ö¸Áî¿ÉÒÔÉèÖÃµ¥¸ö»ò¶à¸ö±£³Ö¼Ä´æÆ÷
-		Ö÷»ú·¢ËÍ:
-			11 ´Ó»úµØÖ·
-			06 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷µØÖ·¸ß×Ö½Ú
-			01 ¼Ä´æÆ÷µØÖ·µÍ×Ö½Ú
-			00 Êý¾Ý1¸ß×Ö½Ú
-			01 Êý¾Ý1µÍ×Ö½Ú
-			9A CRCÐ£Ñé¸ß×Ö½Ú
-			9B CRCÐ£ÑéµÍ×Ö½Ú
-		´Ó»úÏìÓ¦:
-			11 ´Ó»úµØÖ·
-			06 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷µØÖ·¸ß×Ö½Ú
-			01 ¼Ä´æÆ÷µØÖ·µÍ×Ö½Ú
-			00 Êý¾Ý1¸ß×Ö½Ú
-			01 Êý¾Ý1µÍ×Ö½Ú
-			1B CRCÐ£Ñé¸ß×Ö½Ú
-			5A	CRCÐ£ÑéµÍ×Ö½Ú
-		Àý×Ó:
-			01 06 30 06 00 25  A710    ---- ´¥·¢µçÁ÷ÉèÖÃÎª 2.5
-			01 06 30 06 00 10  6707    ---- ´¥·¢µçÁ÷ÉèÖÃÎª 1.0
-			01 06 30 1B 00 00  F6CD    ---- SMA ÂË²¨ÏµÊý = 0 ¹Ø±ÕÂË²¨
-			01 06 30 1B 00 01  370D    ---- SMA ÂË²¨ÏµÊý = 1
-			01 06 30 1B 00 02  770C    ---- SMA ÂË²¨ÏµÊý = 2
-			01 06 30 1B 00 05  36CE    ---- SMA ÂË²¨ÏµÊý = 5
-			01 06 30 07 00 01  F6CB    ---- ²âÊÔÄ£Ê½ÐÞ¸ÄÎª T1
-			01 06 30 07 00 02  B6CA    ---- ²âÊÔÄ£Ê½ÐÞ¸ÄÎª T2
-			01 06 31 00 00 00  8736    ---- ²Á³ýÀËÓ¿¼ÇÂ¼Çø
-			01 06 31 01 00 00  D6F6    ---- ²Á³ý¸æ¾¯¼ÇÂ¼Çø
+		å†™ä¿æŒå¯„å­˜å™¨ã€‚æ³¨æ„06æŒ‡ä»¤åªèƒ½æ“ä½œå•ä¸ªä¿æŒå¯„å­˜å™¨ï¼Œ16æŒ‡ä»¤å¯ä»¥è®¾ç½®å•ä¸ªæˆ–å¤šä¸ªä¿æŒå¯„å­˜å™¨
+		ä¸»æœºå‘é€:
+			11 ä»Žæœºåœ°å€
+			06 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨åœ°å€é«˜å­—èŠ‚
+			01 å¯„å­˜å™¨åœ°å€ä½Žå­—èŠ‚
+			00 æ•°æ®1é«˜å­—èŠ‚
+			01 æ•°æ®1ä½Žå­—èŠ‚
+			9A CRCæ ¡éªŒé«˜å­—èŠ‚
+			9B CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä»Žæœºå“åº”:
+			11 ä»Žæœºåœ°å€
+			06 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨åœ°å€é«˜å­—èŠ‚
+			01 å¯„å­˜å™¨åœ°å€ä½Žå­—èŠ‚
+			00 æ•°æ®1é«˜å­—èŠ‚
+			01 æ•°æ®1ä½Žå­—èŠ‚
+			1B CRCæ ¡éªŒé«˜å­—èŠ‚
+			5A	CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä¾‹å­:
+			01 06 30 06 00 25  A710    ---- è§¦å‘ç”µæµè®¾ç½®ä¸º 2.5
+			01 06 30 06 00 10  6707    ---- è§¦å‘ç”µæµè®¾ç½®ä¸º 1.0
+			01 06 30 1B 00 00  F6CD    ---- SMA æ»¤æ³¢ç³»æ•° = 0 å…³é—­æ»¤æ³¢
+			01 06 30 1B 00 01  370D    ---- SMA æ»¤æ³¢ç³»æ•° = 1
+			01 06 30 1B 00 02  770C    ---- SMA æ»¤æ³¢ç³»æ•° = 2
+			01 06 30 1B 00 05  36CE    ---- SMA æ»¤æ³¢ç³»æ•° = 5
+			01 06 30 07 00 01  F6CB    ---- æµ‹è¯•æ¨¡å¼ä¿®æ”¹ä¸º T1
+			01 06 30 07 00 02  B6CA    ---- æµ‹è¯•æ¨¡å¼ä¿®æ”¹ä¸º T2
+			01 06 31 00 00 00  8736    ---- æ“¦é™¤æµªæ¶Œè®°å½•åŒº
+			01 06 31 01 00 00  D6F6    ---- æ“¦é™¤å‘Šè­¦è®°å½•åŒº
 */
 	uint16_t reg;
 	uint16_t value;
@@ -824,68 +824,68 @@ static void ModbusSlave06H(ModbusSlave_t *pxModbusSlave)
 
 	if (pxModbusSlave->pxModbusBase->usRXCnt != 8)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		goto err_ret;
 	}
 
-	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]);	  /* ¼Ä´æÆ÷ºÅ */
-	value = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* ¼Ä´æÆ÷Öµ */
+	reg = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]);	  /* å¯„å­˜å™¨å· */
+	value = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]); /* å¯„å­˜å™¨å€¼ */
 
-	if (ModbusSlave06H10HCallBack(pxModbusSlave, reg, &value, 1) == 0) /* ¸Ãº¯Êý»á°ÑÐ´ÈëµÄÖµ´æÈë¼Ä´æÆ÷ */
+	if (ModbusSlave06H10HCallBack(pxModbusSlave, reg, &value, 1) == 0) /* è¯¥å‡½æ•°ä¼šæŠŠå†™å…¥çš„å€¼å­˜å…¥å¯„å­˜å™¨ */
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_REG_ADDR; /* ¼Ä´æÆ÷µØÖ·´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_REG_ADDR; /* å¯„å­˜å™¨åœ°å€é”™è¯¯ */
 	}
 
 err_ret:
-	if (pxModbusSlave->ucRspCode == RSP_OK) /* ÕýÈ·Ó¦´ð */
+	if (pxModbusSlave->ucRspCode == RSP_OK) /* æ­£ç¡®åº”ç­” */
 	{
 		ModbusSlaveSendAckOk(pxModbusSlave);
 	}
 	else
 	{
-		ModbusSlaveSendAckErr(pxModbusSlave); /* ¸æËßÖ÷»úÃüÁî´íÎó */
+		ModbusSlaveSendAckErr(pxModbusSlave); /* å‘Šè¯‰ä¸»æœºå‘½ä»¤é”™è¯¯ */
 	}
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êý Ãû: ModbusSlave10H
-*	¹¦ÄÜËµÃ÷: Á¬ÐøÐ´¶à¸ö¼Ä´æÆ÷.  ½øÓÃÓÚ¸ÄÐ´Ê±ÖÓ
-*	ÐÎ    ²Î: ÎÞ
-*	·µ »Ø Öµ: ÎÞ
+*	å‡½ æ•° å: ModbusSlave10H
+*	åŠŸèƒ½è¯´æ˜Ž: è¿žç»­å†™å¤šä¸ªå¯„å­˜å™¨.  è¿›ç”¨äºŽæ”¹å†™æ—¶é’Ÿ
+*	å½¢    å‚: æ— 
+*	è¿” å›ž å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusSlave10H(ModbusSlave_t *pxModbusSlave)
 {
 	/*
-		´Ó»úµØÖ·Îª11H¡£±£³Ö¼Ä´æÆ÷µÄÆäÊµµØÖ·Îª0001H£¬¼Ä´æÆ÷µÄ½áÊøµØÖ·Îª0002H¡£×Ü¹²·ÃÎÊ2¸ö¼Ä´æÆ÷¡£
-		±£³Ö¼Ä´æÆ÷0001HµÄÄÚÈÝÎª000AH£¬±£³Ö¼Ä´æÆ÷0002HµÄÄÚÈÝÎª0102H¡£
-		Ö÷»ú·¢ËÍ:
-			11 ´Ó»úµØÖ·
-			10 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷ÆðÊ¼µØÖ·¸ß×Ö½Ú
-			01 ¼Ä´æÆ÷ÆðÊ¼µØÖ·µÍ×Ö½Ú
-			00 ¼Ä´æÆ÷ÊýÁ¿¸ß×Ö½Ú
-			02 ¼Ä´æÆ÷ÊýÁ¿µÍ×Ö½Ú
-			04 ×Ö½ÚÊý
-			00 Êý¾Ý1¸ß×Ö½Ú
-			0A Êý¾Ý1µÍ×Ö½Ú
-			01 Êý¾Ý2¸ß×Ö½Ú
-			02 Êý¾Ý2µÍ×Ö½Ú
-			C6 CRCÐ£Ñé¸ß×Ö½Ú
-			F0 CRCÐ£ÑéµÍ×Ö½Ú
-		´Ó»úÏìÓ¦:
-			11 ´Ó»úµØÖ·
-			06 ¹¦ÄÜÂë
-			00 ¼Ä´æÆ÷µØÖ·¸ß×Ö½Ú
-			01 ¼Ä´æÆ÷µØÖ·µÍ×Ö½Ú
-			00 Êý¾Ý1¸ß×Ö½Ú
-			01 Êý¾Ý1µÍ×Ö½Ú
-			1B CRCÐ£Ñé¸ß×Ö½Ú
-			5A	CRCÐ£ÑéµÍ×Ö½Ú
-		Àý×Ó:
-			01 10 30 00 00 06 0C  07 DE  00 0A  00 01  00 08  00 0C  00 00     389A    ---- Ð´Ê±ÖÓ 2014-10-01 08:12:00
-			01 10 30 00 00 06 0C  07 DF  00 01  00 1F  00 17  00 3B  00 39     5549    ---- Ð´Ê±ÖÓ 2015-01-31 23:59:57
+		ä»Žæœºåœ°å€ä¸º11Hã€‚ä¿æŒå¯„å­˜å™¨çš„å…¶å®žåœ°å€ä¸º0001Hï¼Œå¯„å­˜å™¨çš„ç»“æŸåœ°å€ä¸º0002Hã€‚æ€»å…±è®¿é—®2ä¸ªå¯„å­˜å™¨ã€‚
+		ä¿æŒå¯„å­˜å™¨0001Hçš„å†…å®¹ä¸º000AHï¼Œä¿æŒå¯„å­˜å™¨0002Hçš„å†…å®¹ä¸º0102Hã€‚
+		ä¸»æœºå‘é€:
+			11 ä»Žæœºåœ°å€
+			10 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨èµ·å§‹åœ°å€é«˜å­—èŠ‚
+			01 å¯„å­˜å™¨èµ·å§‹åœ°å€ä½Žå­—èŠ‚
+			00 å¯„å­˜å™¨æ•°é‡é«˜å­—èŠ‚
+			02 å¯„å­˜å™¨æ•°é‡ä½Žå­—èŠ‚
+			04 å­—èŠ‚æ•°
+			00 æ•°æ®1é«˜å­—èŠ‚
+			0A æ•°æ®1ä½Žå­—èŠ‚
+			01 æ•°æ®2é«˜å­—èŠ‚
+			02 æ•°æ®2ä½Žå­—èŠ‚
+			C6 CRCæ ¡éªŒé«˜å­—èŠ‚
+			F0 CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä»Žæœºå“åº”:
+			11 ä»Žæœºåœ°å€
+			06 åŠŸèƒ½ç 
+			00 å¯„å­˜å™¨åœ°å€é«˜å­—èŠ‚
+			01 å¯„å­˜å™¨åœ°å€ä½Žå­—èŠ‚
+			00 æ•°æ®1é«˜å­—èŠ‚
+			01 æ•°æ®1ä½Žå­—èŠ‚
+			1B CRCæ ¡éªŒé«˜å­—èŠ‚
+			5A	CRCæ ¡éªŒä½Žå­—èŠ‚
+		ä¾‹å­:
+			01 10 30 00 00 06 0C  07 DE  00 0A  00 01  00 08  00 0C  00 00     389A    ---- å†™æ—¶é’Ÿ 2014-10-01 08:12:00
+			01 10 30 00 00 06 0C  07 DF  00 01  00 1F  00 17  00 3B  00 39     5549    ---- å†™æ—¶é’Ÿ 2015-01-31 23:59:57
 	*/
 	uint16_t reg_addr;
 	uint16_t reg_num;
@@ -896,17 +896,17 @@ static void ModbusSlave10H(ModbusSlave_t *pxModbusSlave)
 
 	if (pxModbusSlave->pxModbusBase->usRXCnt < 11)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		goto err_ret;
 	}
 
-	reg_addr = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* ¼Ä´æÆ÷ºÅ */
-	reg_num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]);	 /* ¼Ä´æÆ÷¸öÊý */
-	byte_num = pxModbusSlave->pxModbusBase->pucRXBuf[6];				 /* ºóÃæµÄÊý¾ÝÌå×Ö½ÚÊý */
+	reg_addr = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[2]); /* å¯„å­˜å™¨å· */
+	reg_num = BEBufToUint16(&pxModbusSlave->pxModbusBase->pucRXBuf[4]);	 /* å¯„å­˜å™¨ä¸ªæ•° */
+	byte_num = pxModbusSlave->pxModbusBase->pucRXBuf[6];				 /* åŽé¢çš„æ•°æ®ä½“å­—èŠ‚æ•° */
 
 	if (byte_num != 2 * reg_num)
 	{
-		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* Êý¾ÝÖµÓò´íÎó */
+		pxModbusSlave->ucRspCode = RSP_ERR_VALUE; /* æ•°æ®å€¼åŸŸé”™è¯¯ */
 		goto err_ret;
 	}
 	for (uint8_t i = 0; i < reg_num; i++)
@@ -918,12 +918,12 @@ static void ModbusSlave10H(ModbusSlave_t *pxModbusSlave)
 		pxModbusSlave->ucRspCode = RSP_ERR_REG_ADDR;
 	}
 err_ret:
-	if (pxModbusSlave->ucRspCode == RSP_OK) /* ÕýÈ·Ó¦´ð */
+	if (pxModbusSlave->ucRspCode == RSP_OK) /* æ­£ç¡®åº”ç­” */
 	{
 		ModbusSlaveSendAckOk(pxModbusSlave);
 	}
 	else
 	{
-		ModbusSlaveSendAckErr(pxModbusSlave); /* ¸æËßÖ÷»úÃüÁî´íÎó */
+		ModbusSlaveSendAckErr(pxModbusSlave); /* å‘Šè¯‰ä¸»æœºå‘½ä»¤é”™è¯¯ */
 	}
 }

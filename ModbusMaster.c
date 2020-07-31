@@ -1,28 +1,28 @@
 /*
 *********************************************************************************************************
 *
-*	Ä£¿éÃû³Æ : MODSBUSÍ¨ĞÅ³ÌĞò £¨Ö÷»ú£©
-*	ÎÄ¼şÃû³Æ : modbus_host.c
-*	°æ    ±¾ : V1.4
-*	Ëµ    Ã÷ : ÎŞÏßÍ¨ĞÅ³ÌĞò¡£Í¨ĞÅĞ­Òé»ùÓÚMODBUS
-*	ĞŞ¸Ä¼ÇÂ¼ :
-*		°æ±¾ºÅ  ÈÕÆÚ        ×÷Õß    ËµÃ÷
-*       V1.4   2015-11-28 ĞŞ¸ÄĞ­Òé
+*	æ¨¡å—åç§° : MODSBUSé€šä¿¡ç¨‹åº ï¼ˆä¸»æœºï¼‰
+*	æ–‡ä»¶åç§° : modbus_host.c
+*	ç‰ˆ    æœ¬ : V1.4
+*	è¯´    æ˜ : æ— çº¿é€šä¿¡ç¨‹åºã€‚é€šä¿¡åè®®åŸºäºMODBUS
+*	ä¿®æ”¹è®°å½• :
+*		ç‰ˆæœ¬å·  æ—¥æœŸ        ä½œè€…    è¯´æ˜
+*       V1.4   2015-11-28 ä¿®æ”¹åè®®
 *
-*	Copyright (C), 2015-2016, °²¸»À³µç×Ó www.armfly.com
+*	Copyright (C), 2015-2016, å®‰å¯Œè±ç”µå­ www.armfly.com
 *
 *********************************************************************************************************
 */
 #include "ModbusMaster.h"
 
-/* RTU Ó¦´ğ´úÂë */
-#define RSP_OK 0x00				   /* ³É¹¦ */
-#define RSP_ERR_CMD 0x01		   /* ²»Ö§³ÖµÄ¹¦ÄÜÂë */
-#define RSP_ERRusRagAddr_ADDR 0x02 /* ¼Ä´æÆ÷µØÖ·´íÎó */
-#define RSP_ERRusRagValue 0x03	   /* Êı¾İÖµÓò´íÎó */
-#define RSP_ERR_WRITE 0x04		   /* Ğ´ÈëÊ§°Ü */
+/* RTU åº”ç­”ä»£ç  */
+#define RSP_OK 0x00				   /* æˆåŠŸ */
+#define RSP_ERR_CMD 0x01		   /* ä¸æ”¯æŒçš„åŠŸèƒ½ç  */
+#define RSP_ERRusRagAddr_ADDR 0x02 /* å¯„å­˜å™¨åœ°å€é”™è¯¯ */
+#define RSP_ERRusRagValue 0x03	   /* æ•°æ®å€¼åŸŸé”™è¯¯ */
+#define RSP_ERR_WRITE 0x04		   /* å†™å…¥å¤±è´¥ */
 
-// CRC ¸ßÎ»×Ö½ÚÖµ±í
+// CRC é«˜ä½å­—èŠ‚å€¼è¡¨
 static const uint8_t s_CRCHi[] = {
 	0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
 	0x80, 0x41, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
@@ -50,7 +50,7 @@ static const uint8_t s_CRCHi[] = {
 	0x81, 0x40, 0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41,
 	0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0,
 	0x80, 0x41, 0x00, 0xC1, 0x81, 0x40};
-// CRC µÍÎ»×Ö½ÚÖµ±í
+// CRC ä½ä½å­—èŠ‚å€¼è¡¨
 static const uint8_t s_CRCLo[] = {
 	0x00, 0xC0, 0xC1, 0x01, 0xC3, 0x03, 0x02, 0xC2, 0xC6, 0x06,
 	0x07, 0xC7, 0x05, 0xC5, 0xC4, 0x04, 0xCC, 0x0C, 0x0D, 0xCD,
@@ -81,29 +81,29 @@ static const uint8_t s_CRCLo[] = {
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: CRC16Modbus
-*	¹¦ÄÜËµÃ÷: ¼ÆËãCRC¡£ ÓÃÓÚModbusĞ­Òé¡£
-*	ĞÎ    ²Î: _pBuf : ²ÎÓëĞ£ÑéµÄÊı¾İ
-*			  _usLen : Êı¾İ³¤¶È
-*	·µ »Ø Öµ: 16Î»ÕûÊıÖµ¡£ ¶ÔÓÚModbus £¬´Ë½á¹û¸ß×Ö½ÚÏÈ´«ËÍ£¬µÍ×Ö½Úºó´«ËÍ¡£
+*	å‡½ æ•° å: CRC16Modbus
+*	åŠŸèƒ½è¯´æ˜: è®¡ç®—CRCã€‚ ç”¨äºModbusåè®®ã€‚
+*	å½¢    å‚: _pBuf : å‚ä¸æ ¡éªŒçš„æ•°æ®
+*			  _usLen : æ•°æ®é•¿åº¦
+*	è¿” å› å€¼: 16ä½æ•´æ•°å€¼ã€‚ å¯¹äºModbus ï¼Œæ­¤ç»“æœé«˜å­—èŠ‚å…ˆä¼ é€ï¼Œä½å­—èŠ‚åä¼ é€ã€‚
 *
-*   ËùÓĞ¿ÉÄÜµÄCRCÖµ¶¼±»Ô¤×°ÔÚÁ½¸öÊı×éµ±ÖĞ£¬µ±¼ÆËã±¨ÎÄÄÚÈİÊ±¿ÉÒÔ¼òµ¥µÄË÷Òı¼´¿É£»
-*   Ò»¸öÊı×é°üº¬ÓĞ16Î»CRCÓòµÄËùÓĞ256¸ö¿ÉÄÜµÄ¸ßÎ»×Ö½Ú£¬ÁíÒ»¸öÊı×éº¬ÓĞµÍÎ»×Ö½ÚµÄÖµ£»
-*   ÕâÖÖË÷Òı·ÃÎÊCRCµÄ·½Ê½Ìá¹©ÁË±È¶Ô±¨ÎÄ»º³åÇøµÄÃ¿Ò»¸öĞÂ×Ö·û¶¼¼ÆËãĞÂµÄCRC¸ü¿ìµÄ·½·¨£»
+*   æ‰€æœ‰å¯èƒ½çš„CRCå€¼éƒ½è¢«é¢„è£…åœ¨ä¸¤ä¸ªæ•°ç»„å½“ä¸­ï¼Œå½“è®¡ç®—æŠ¥æ–‡å†…å®¹æ—¶å¯ä»¥ç®€å•çš„ç´¢å¼•å³å¯ï¼›
+*   ä¸€ä¸ªæ•°ç»„åŒ…å«æœ‰16ä½CRCåŸŸçš„æ‰€æœ‰256ä¸ªå¯èƒ½çš„é«˜ä½å­—èŠ‚ï¼Œå¦ä¸€ä¸ªæ•°ç»„å«æœ‰ä½ä½å­—èŠ‚çš„å€¼ï¼›
+*   è¿™ç§ç´¢å¼•è®¿é—®CRCçš„æ–¹å¼æä¾›äº†æ¯”å¯¹æŠ¥æ–‡ç¼“å†²åŒºçš„æ¯ä¸€ä¸ªæ–°å­—ç¬¦éƒ½è®¡ç®—æ–°çš„CRCæ›´å¿«çš„æ–¹æ³•ï¼›
 *
-*  ×¢Òâ£º´Ë³ÌĞòÄÚ²¿Ö´ĞĞ¸ß/µÍCRC×Ö½ÚµÄ½»»»¡£´Ëº¯Êı·µ»ØµÄÊÇÒÑ¾­¾­¹ı½»»»µÄCRCÖµ£»Ò²¾ÍÊÇËµ£¬¸Ãº¯ÊıµÄ·µ»ØÖµ¿ÉÒÔÖ±½Ó·ÅÖÃ
-*        ÓÚ±¨ÎÄÓÃÓÚ·¢ËÍ£»
+*  æ³¨æ„ï¼šæ­¤ç¨‹åºå†…éƒ¨æ‰§è¡Œé«˜/ä½CRCå­—èŠ‚çš„äº¤æ¢ã€‚æ­¤å‡½æ•°è¿”å›çš„æ˜¯å·²ç»ç»è¿‡äº¤æ¢çš„CRCå€¼ï¼›ä¹Ÿå°±æ˜¯è¯´ï¼Œè¯¥å‡½æ•°çš„è¿”å›å€¼å¯ä»¥ç›´æ¥æ”¾ç½®
+*        äºæŠ¥æ–‡ç”¨äºå‘é€ï¼›
 *********************************************************************************************************
 */
 static uint16_t CRC16Modbus(uint8_t *_pBuf, uint16_t _usLen)
 {
-	uint8_t ucCRCHi = 0xFF; /* ¸ßCRC×Ö½Ú³õÊ¼»¯ */
-	uint8_t ucCRCLo = 0xFF; /* µÍCRC ×Ö½Ú³õÊ¼»¯ */
-	uint16_t usIndex;		/* CRCÑ­»·ÖĞµÄË÷Òı */
+	uint8_t ucCRCHi = 0xFF; /* é«˜CRCå­—èŠ‚åˆå§‹åŒ– */
+	uint8_t ucCRCLo = 0xFF; /* ä½CRC å­—èŠ‚åˆå§‹åŒ– */
+	uint16_t usIndex;		/* CRCå¾ªç¯ä¸­çš„ç´¢å¼• */
 
 	while (_usLen--)
 	{
-		usIndex = ucCRCHi ^ *_pBuf++; /* ¼ÆËãCRC */
+		usIndex = ucCRCHi ^ *_pBuf++; /* è®¡ç®—CRC */
 		ucCRCHi = ucCRCLo ^ s_CRCHi[usIndex];
 		ucCRCLo = s_CRCLo[usIndex];
 	}
@@ -112,12 +112,12 @@ static uint16_t CRC16Modbus(uint8_t *_pBuf, uint16_t _usLen)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: BEBufToUint16
-*	¹¦ÄÜËµÃ÷: ½«2×Ö½ÚÊı×é(´ó¶ËBig Endian´ÎĞò£¬¸ß×Ö½ÚÔÚÇ°)×ª»»Îª16Î»ÕûÊı
-*	ĞÎ    ²Î: _pBuf : Êı×é
-*	·µ »Ø Öµ: 16Î»ÕûÊıÖµ
+*	å‡½ æ•° å: BEBufToUint16
+*	åŠŸèƒ½è¯´æ˜: å°†2å­—èŠ‚æ•°ç»„(å¤§ç«¯Big Endianæ¬¡åºï¼Œé«˜å­—èŠ‚åœ¨å‰)è½¬æ¢ä¸º16ä½æ•´æ•°
+*	å½¢    å‚: _pBuf : æ•°ç»„
+*	è¿” å› å€¼: 16ä½æ•´æ•°å€¼
 *
-*   ´ó¶Ë(Big Endian)ÓëĞ¡¶Ë(Little Endian)
+*   å¤§ç«¯(Big Endian)ä¸å°ç«¯(Little Endian)
 *********************************************************************************************************
 */
 static uint16_t BEBufToUint16(uint8_t *_pBuf)
@@ -126,7 +126,7 @@ static uint16_t BEBufToUint16(uint8_t *_pBuf)
 }
 /*********************************************************************************************/
 
-/* ±£´æÃ¿¸ö´Ó»úµÄ¼ÆÊıÆ÷Öµ */
+/* ä¿å­˜æ¯ä¸ªä»æœºçš„è®¡æ•°å™¨å€¼ */
 
 static void ModbusMaster01H(ModbusMaster_t *pxModbusMaster);
 static void ModbusMaster02H(ModbusMaster_t *pxModbusMaster);
@@ -143,10 +143,10 @@ void ModbusMasterInit(ModbusMaster_t *pxModbusMaster)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterSendAckWithCRC
-*	¹¦ÄÜËµÃ÷: ·¢ËÍÓ¦´ğ,×Ô¶¯¼ÓCRC.  
-*	ĞÎ    ²Î: ÎŞ¡£·¢ËÍÊı¾İÔÚ pxModbusMaster->ucTXBuf[], [pxModbusMaster->usTXCnt
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMasterSendAckWithCRC
+*	åŠŸèƒ½è¯´æ˜: å‘é€åº”ç­”,è‡ªåŠ¨åŠ CRC.  
+*	å½¢    å‚: æ— ã€‚å‘é€æ•°æ®åœ¨ pxModbusMaster->ucTXBuf[], [pxModbusMaster->usTXCnt
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMasterSendAckWithCRC(ModbusMaster_t *pxModbusMaster)
@@ -160,41 +160,41 @@ static void ModbusMasterSendAckWithCRC(ModbusMaster_t *pxModbusMaster)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterAnalyzeApp
-*	¹¦ÄÜËµÃ÷: ·ÖÎöÓ¦ÓÃ²ãĞ­Òé¡£´¦ÀíÓ¦´ğ¡£
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMasterAnalyzeApp
+*	åŠŸèƒ½è¯´æ˜: åˆ†æåº”ç”¨å±‚åè®®ã€‚å¤„ç†åº”ç­”ã€‚
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMasterAnalyzeApp(ModbusMaster_t *pxModbusMaster)
 {
-	switch (pxModbusMaster->pxModbusBase->pucRXBuf[1]) /* µÚ2¸ö×Ö½Ú ¹¦ÄÜÂë */
+	switch (pxModbusMaster->pxModbusBase->pucRXBuf[1]) /* ç¬¬2ä¸ªå­—èŠ‚ åŠŸèƒ½ç  */
 	{
-	case 0x01: /* ¶ÁÈ¡ÏßÈ¦×´Ì¬ */
+	case 0x01: /* è¯»å–çº¿åœˆçŠ¶æ€ */
 		ModbusMaster01H(pxModbusMaster);
 		break;
 
-	case 0x02: /* ¶ÁÈ¡ÊäÈë×´Ì¬ */
+	case 0x02: /* è¯»å–è¾“å…¥çŠ¶æ€ */
 		ModbusMaster02H(pxModbusMaster);
 		break;
 
-	case 0x03: /* ¶ÁÈ¡±£³Ö¼Ä´æÆ÷ ÔÚÒ»¸ö»ò¶à¸ö±£³Ö¼Ä´æÆ÷ÖĞÈ¡µÃµ±Ç°µÄ¶ş½øÖÆÖµ */
+	case 0x03: /* è¯»å–ä¿æŒå¯„å­˜å™¨ åœ¨ä¸€ä¸ªæˆ–å¤šä¸ªä¿æŒå¯„å­˜å™¨ä¸­å–å¾—å½“å‰çš„äºŒè¿›åˆ¶å€¼ */
 		ModbusMaster03H(pxModbusMaster);
 		break;
 
-	case 0x04: /* ¶ÁÈ¡ÊäÈë¼Ä´æÆ÷ */
+	case 0x04: /* è¯»å–è¾“å…¥å¯„å­˜å™¨ */
 		ModbusMaster04H(pxModbusMaster);
 		break;
 
-	case 0x05: /* Ç¿ÖÆµ¥ÏßÈ¦ */
+	case 0x05: /* å¼ºåˆ¶å•çº¿åœˆ */
 		ModbusMaster05H(pxModbusMaster);
 		break;
 
-	case 0x06: /* Ğ´µ¥¸ö¼Ä´æÆ÷ */
+	case 0x06: /* å†™å•ä¸ªå¯„å­˜å™¨ */
 		ModbusMaster06H(pxModbusMaster);
 		break;
 
-	case 0x10: /* Ğ´¶à¸ö¼Ä´æÆ÷ */
+	case 0x10: /* å†™å¤šä¸ªå¯„å­˜å™¨ */
 		ModbusMaster10H(pxModbusMaster);
 		break;
 
@@ -205,129 +205,129 @@ static void ModbusMasterAnalyzeApp(ModbusMaster_t *pxModbusMaster)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterSend01H
-*	¹¦ÄÜËµÃ÷: ·¢ËÍ01HÖ¸Áî£¬²éÑ¯1¸ö»ò¶à¸ö±£³Ö¼Ä´æÆ÷
-*	ĞÎ    ²Î: ucAddr : ´ÓÕ¾µØÖ·
-*			  usRagAddr : ¼Ä´æÆ÷±àºÅ
-*			  usRagNum : ¼Ä´æÆ÷¸öÊı
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMasterSend01H
+*	åŠŸèƒ½è¯´æ˜: å‘é€01HæŒ‡ä»¤ï¼ŒæŸ¥è¯¢1ä¸ªæˆ–å¤šä¸ªä¿æŒå¯„å­˜å™¨
+*	å½¢    å‚: ucAddr : ä»ç«™åœ°å€
+*			  usRagAddr : å¯„å­˜å™¨ç¼–å·
+*			  usRagNum : å¯„å­˜å™¨ä¸ªæ•°
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMasterSend01H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagNum)
 {
 	pxModbusMaster->pxModbusBase->usTXCnt = 0;
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ´ÓÕ¾µØÖ· */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x01;									/* ¹¦ÄÜÂë */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* ¼Ä´æÆ÷±àºÅ ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* ¼Ä´æÆ÷±àºÅ µÍ×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* ¼Ä´æÆ÷¸öÊı ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* ¼Ä´æÆ÷¸öÊı µÍ×Ö½Ú */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ä»ç«™åœ°å€ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x01;									/* åŠŸèƒ½ç  */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* å¯„å­˜å™¨ç¼–å· é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* å¯„å­˜å™¨ç¼–å· ä½å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* å¯„å­˜å™¨ä¸ªæ•° é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* å¯„å­˜å™¨ä¸ªæ•° ä½å­—èŠ‚ */
 
-	ModbusMasterSendAckWithCRC(pxModbusMaster); /* ·¢ËÍÊı¾İ£¬×Ô¶¯¼ÓCRC */
+	ModbusMasterSendAckWithCRC(pxModbusMaster); /* å‘é€æ•°æ®ï¼Œè‡ªåŠ¨åŠ CRC */
 
-	pxModbusMaster->ucRegNum = usRagNum;  /* ¼Ä´æÆ÷¸öÊı */
-	pxModbusMaster->usReg01H = usRagAddr; /* ±£´æ03HÖ¸ÁîÖĞµÄ¼Ä´æÆ÷µØÖ·£¬·½±ã¶ÔÓ¦´ğÊı¾İ½øĞĞ·ÖÀà */
+	pxModbusMaster->ucRegNum = usRagNum;  /* å¯„å­˜å™¨ä¸ªæ•° */
+	pxModbusMaster->usReg01H = usRagAddr; /* ä¿å­˜03HæŒ‡ä»¤ä¸­çš„å¯„å­˜å™¨åœ°å€ï¼Œæ–¹ä¾¿å¯¹åº”ç­”æ•°æ®è¿›è¡Œåˆ†ç±» */
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterSend02H
-*	¹¦ÄÜËµÃ÷: ·¢ËÍ02HÖ¸Áî£¬¶ÁÀëÉ¢ÊäÈë¼Ä´æÆ÷
-*	ĞÎ    ²Î: ucAddr : ´ÓÕ¾µØÖ·
-*			  usRagAddr : ¼Ä´æÆ÷±àºÅ
-*			  usRagNum : ¼Ä´æÆ÷¸öÊı
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMasterSend02H
+*	åŠŸèƒ½è¯´æ˜: å‘é€02HæŒ‡ä»¤ï¼Œè¯»ç¦»æ•£è¾“å…¥å¯„å­˜å™¨
+*	å½¢    å‚: ucAddr : ä»ç«™åœ°å€
+*			  usRagAddr : å¯„å­˜å™¨ç¼–å·
+*			  usRagNum : å¯„å­˜å™¨ä¸ªæ•°
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMasterSend02H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagNum)
 {
 	pxModbusMaster->pxModbusBase->usTXCnt = 0;
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ´ÓÕ¾µØÖ· */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x02;									/* ¹¦ÄÜÂë */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* ¼Ä´æÆ÷±àºÅ ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* ¼Ä´æÆ÷±àºÅ µÍ×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* ¼Ä´æÆ÷¸öÊı ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* ¼Ä´æÆ÷¸öÊı µÍ×Ö½Ú */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ä»ç«™åœ°å€ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x02;									/* åŠŸèƒ½ç  */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* å¯„å­˜å™¨ç¼–å· é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* å¯„å­˜å™¨ç¼–å· ä½å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* å¯„å­˜å™¨ä¸ªæ•° é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* å¯„å­˜å™¨ä¸ªæ•° ä½å­—èŠ‚ */
 
-	ModbusMasterSendAckWithCRC(pxModbusMaster); /* ·¢ËÍÊı¾İ£¬×Ô¶¯¼ÓCRC */
+	ModbusMasterSendAckWithCRC(pxModbusMaster); /* å‘é€æ•°æ®ï¼Œè‡ªåŠ¨åŠ CRC */
 
-	pxModbusMaster->ucRegNum = usRagNum;  /* ¼Ä´æÆ÷¸öÊı */
-	pxModbusMaster->usReg02H = usRagAddr; /* ±£´æ03HÖ¸ÁîÖĞµÄ¼Ä´æÆ÷µØÖ·£¬·½±ã¶ÔÓ¦´ğÊı¾İ½øĞĞ·ÖÀà */
+	pxModbusMaster->ucRegNum = usRagNum;  /* å¯„å­˜å™¨ä¸ªæ•° */
+	pxModbusMaster->usReg02H = usRagAddr; /* ä¿å­˜03HæŒ‡ä»¤ä¸­çš„å¯„å­˜å™¨åœ°å€ï¼Œæ–¹ä¾¿å¯¹åº”ç­”æ•°æ®è¿›è¡Œåˆ†ç±» */
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterSend03H
-*	¹¦ÄÜËµÃ÷: ·¢ËÍ03HÖ¸Áî£¬²éÑ¯1¸ö»ò¶à¸ö±£³Ö¼Ä´æÆ÷
-*	ĞÎ    ²Î: ucAddr : ´ÓÕ¾µØÖ·
-*			  usRagAddr : ¼Ä´æÆ÷±àºÅ
-*			  usRagNum : ¼Ä´æÆ÷¸öÊı
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMasterSend03H
+*	åŠŸèƒ½è¯´æ˜: å‘é€03HæŒ‡ä»¤ï¼ŒæŸ¥è¯¢1ä¸ªæˆ–å¤šä¸ªä¿æŒå¯„å­˜å™¨
+*	å½¢    å‚: ucAddr : ä»ç«™åœ°å€
+*			  usRagAddr : å¯„å­˜å™¨ç¼–å·
+*			  usRagNum : å¯„å­˜å™¨ä¸ªæ•°
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMasterSend03H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagNum)
 {
 	pxModbusMaster->pxModbusBase->usTXCnt = 0;
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ´ÓÕ¾µØÖ· */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x03;									/* ¹¦ÄÜÂë */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* ¼Ä´æÆ÷±àºÅ ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* ¼Ä´æÆ÷±àºÅ µÍ×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* ¼Ä´æÆ÷¸öÊı ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* ¼Ä´æÆ÷¸öÊı µÍ×Ö½Ú */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ä»ç«™åœ°å€ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x03;									/* åŠŸèƒ½ç  */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* å¯„å­˜å™¨ç¼–å· é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* å¯„å­˜å™¨ç¼–å· ä½å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* å¯„å­˜å™¨ä¸ªæ•° é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* å¯„å­˜å™¨ä¸ªæ•° ä½å­—èŠ‚ */
 
-	ModbusMasterSendAckWithCRC(pxModbusMaster); /* ·¢ËÍÊı¾İ£¬×Ô¶¯¼ÓCRC */
+	ModbusMasterSendAckWithCRC(pxModbusMaster); /* å‘é€æ•°æ®ï¼Œè‡ªåŠ¨åŠ CRC */
 
-	pxModbusMaster->ucRegNum = usRagNum;  /* ¼Ä´æÆ÷¸öÊı */
-	pxModbusMaster->usReg03H = usRagAddr; /* ±£´æ03HÖ¸ÁîÖĞµÄ¼Ä´æÆ÷µØÖ·£¬·½±ã¶ÔÓ¦´ğÊı¾İ½øĞĞ·ÖÀà */
+	pxModbusMaster->ucRegNum = usRagNum;  /* å¯„å­˜å™¨ä¸ªæ•° */
+	pxModbusMaster->usReg03H = usRagAddr; /* ä¿å­˜03HæŒ‡ä»¤ä¸­çš„å¯„å­˜å™¨åœ°å€ï¼Œæ–¹ä¾¿å¯¹åº”ç­”æ•°æ®è¿›è¡Œåˆ†ç±» */
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterSend04H
-*	¹¦ÄÜËµÃ÷: ·¢ËÍ04HÖ¸Áî£¬¶ÁÊäÈë¼Ä´æÆ÷
-*	ĞÎ    ²Î: ucAddr : ´ÓÕ¾µØÖ·
-*			  usRagAddr : ¼Ä´æÆ÷±àºÅ
-*			  usRagNum : ¼Ä´æÆ÷¸öÊı
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMasterSend04H
+*	åŠŸèƒ½è¯´æ˜: å‘é€04HæŒ‡ä»¤ï¼Œè¯»è¾“å…¥å¯„å­˜å™¨
+*	å½¢    å‚: ucAddr : ä»ç«™åœ°å€
+*			  usRagAddr : å¯„å­˜å™¨ç¼–å·
+*			  usRagNum : å¯„å­˜å™¨ä¸ªæ•°
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMasterSend04H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagNum)
 {
 	pxModbusMaster->pxModbusBase->usTXCnt = 0;
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ´ÓÕ¾µØÖ· */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x04;									/* ¹¦ÄÜÂë */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* ¼Ä´æÆ÷±àºÅ ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* ¼Ä´æÆ÷±àºÅ µÍ×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* ¼Ä´æÆ÷¸öÊı ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* ¼Ä´æÆ÷¸öÊı µÍ×Ö½Ú */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ä»ç«™åœ°å€ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x04;									/* åŠŸèƒ½ç  */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* å¯„å­˜å™¨ç¼–å· é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* å¯„å­˜å™¨ç¼–å· ä½å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* å¯„å­˜å™¨ä¸ªæ•° é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* å¯„å­˜å™¨ä¸ªæ•° ä½å­—èŠ‚ */
 
-	ModbusMasterSendAckWithCRC(pxModbusMaster); /* ·¢ËÍÊı¾İ£¬×Ô¶¯¼ÓCRC */
+	ModbusMasterSendAckWithCRC(pxModbusMaster); /* å‘é€æ•°æ®ï¼Œè‡ªåŠ¨åŠ CRC */
 
-	pxModbusMaster->ucRegNum = usRagNum;  /* ¼Ä´æÆ÷¸öÊı */
-	pxModbusMaster->usReg04H = usRagAddr; /* ±£´æ03HÖ¸ÁîÖĞµÄ¼Ä´æÆ÷µØÖ·£¬·½±ã¶ÔÓ¦´ğÊı¾İ½øĞĞ·ÖÀà */
+	pxModbusMaster->ucRegNum = usRagNum;  /* å¯„å­˜å™¨ä¸ªæ•° */
+	pxModbusMaster->usReg04H = usRagAddr; /* ä¿å­˜03HæŒ‡ä»¤ä¸­çš„å¯„å­˜å™¨åœ°å€ï¼Œæ–¹ä¾¿å¯¹åº”ç­”æ•°æ®è¿›è¡Œåˆ†ç±» */
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterSend05H
-*	¹¦ÄÜËµÃ÷: ·¢ËÍ05HÖ¸Áî£¬Ğ´Ç¿ÖÃµ¥ÏßÈ¦
-*	ĞÎ    ²Î: ucAddr : ´ÓÕ¾µØÖ·
-*			  usRagAddr : ¼Ä´æÆ÷±àºÅ
-*			  usRagValue : ¼Ä´æÆ÷Öµ,2×Ö½Ú
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMasterSend05H
+*	åŠŸèƒ½è¯´æ˜: å‘é€05HæŒ‡ä»¤ï¼Œå†™å¼ºç½®å•çº¿åœˆ
+*	å½¢    å‚: ucAddr : ä»ç«™åœ°å€
+*			  usRagAddr : å¯„å­˜å™¨ç¼–å·
+*			  usRagValue : å¯„å­˜å™¨å€¼,2å­—èŠ‚
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMasterSend05H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagValue)
 {
 	pxModbusMaster->pxModbusBase->usTXCnt = 0;
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ´ÓÕ¾µØÖ· */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x05;									/* ¹¦ÄÜÂë */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* ¼Ä´æÆ÷±àºÅ ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* ¼Ä´æÆ÷±àºÅ µÍ×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagValue >> 8;						/* ¼Ä´æÆ÷Öµ ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagValue;							/* ¼Ä´æÆ÷Öµ µÍ×Ö½Ú */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ä»ç«™åœ°å€ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x05;									/* åŠŸèƒ½ç  */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* å¯„å­˜å™¨ç¼–å· é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* å¯„å­˜å™¨ç¼–å· ä½å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagValue >> 8;						/* å¯„å­˜å™¨å€¼ é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagValue;							/* å¯„å­˜å™¨å€¼ ä½å­—èŠ‚ */
 
-	ModbusMasterSendAckWithCRC(pxModbusMaster); /* ·¢ËÍÊı¾İ£¬×Ô¶¯¼ÓCRC */
+	ModbusMasterSendAckWithCRC(pxModbusMaster); /* å‘é€æ•°æ®ï¼Œè‡ªåŠ¨åŠ CRC */
 
 	pxModbusMaster->ucRegNum = 1;
 	pxModbusMaster->usReg05H = usRagAddr;
@@ -335,25 +335,25 @@ static void ModbusMasterSend05H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAd
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterSend06H
-*	¹¦ÄÜËµÃ÷: ·¢ËÍ06HÖ¸Áî£¬Ğ´1¸ö±£³Ö¼Ä´æÆ÷
-*	ĞÎ    ²Î: ucAddr : ´ÓÕ¾µØÖ·
-*			  usRagAddr : ¼Ä´æÆ÷±àºÅ
-*			  usRagValue : ¼Ä´æÆ÷Öµ,2×Ö½Ú
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMasterSend06H
+*	åŠŸèƒ½è¯´æ˜: å‘é€06HæŒ‡ä»¤ï¼Œå†™1ä¸ªä¿æŒå¯„å­˜å™¨
+*	å½¢    å‚: ucAddr : ä»ç«™åœ°å€
+*			  usRagAddr : å¯„å­˜å™¨ç¼–å·
+*			  usRagValue : å¯„å­˜å™¨å€¼,2å­—èŠ‚
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMasterSend06H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagValue)
 {
 	pxModbusMaster->pxModbusBase->usTXCnt = 0;
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ´ÓÕ¾µØÖ· */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x06;									/* ¹¦ÄÜÂë */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* ¼Ä´æÆ÷±àºÅ ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* ¼Ä´æÆ÷±àºÅ µÍ×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagValue >> 8;						/* ¼Ä´æÆ÷Öµ ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagValue;							/* ¼Ä´æÆ÷Öµ µÍ×Ö½Ú */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ä»ç«™åœ°å€ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x06;									/* åŠŸèƒ½ç  */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* å¯„å­˜å™¨ç¼–å· é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* å¯„å­˜å™¨ç¼–å· ä½å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagValue >> 8;						/* å¯„å­˜å™¨å€¼ é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagValue;							/* å¯„å­˜å™¨å€¼ ä½å­—èŠ‚ */
 
-	ModbusMasterSendAckWithCRC(pxModbusMaster); /* ·¢ËÍÊı¾İ£¬×Ô¶¯¼ÓCRC */
+	ModbusMasterSendAckWithCRC(pxModbusMaster); /* å‘é€æ•°æ®ï¼Œè‡ªåŠ¨åŠ CRC */
 
 	pxModbusMaster->ucRegNum = 1;
 	pxModbusMaster->usReg06H = usRagAddr;
@@ -361,13 +361,13 @@ static void ModbusMasterSend06H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAd
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterSend10H
-*	¹¦ÄÜËµÃ÷: ·¢ËÍ10HÖ¸Áî£¬Á¬ĞøĞ´¶à¸ö±£³Ö¼Ä´æÆ÷. ×î¶àÒ»´ÎÖ§³Ö23¸ö¼Ä´æÆ÷¡£
-*	ĞÎ    ²Î: ucAddr : ´ÓÕ¾µØÖ·
-*			  usRagAddr : ¼Ä´æÆ÷±àºÅ
-*			  usRagNum : ¼Ä´æÆ÷¸öÊın (Ã¿¸ö¼Ä´æÆ÷2¸ö×Ö½Ú) ÖµÓò
-*			  pusRagBuf : n¸ö¼Ä´æÆ÷µÄÊı¾İ¡£³¤¶È = 2 * n
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMasterSend10H
+*	åŠŸèƒ½è¯´æ˜: å‘é€10HæŒ‡ä»¤ï¼Œè¿ç»­å†™å¤šä¸ªä¿æŒå¯„å­˜å™¨. æœ€å¤šä¸€æ¬¡æ”¯æŒ23ä¸ªå¯„å­˜å™¨ã€‚
+*	å½¢    å‚: ucAddr : ä»ç«™åœ°å€
+*			  usRagAddr : å¯„å­˜å™¨ç¼–å·
+*			  usRagNum : å¯„å­˜å™¨ä¸ªæ•°n (æ¯ä¸ªå¯„å­˜å™¨2ä¸ªå­—èŠ‚) å€¼åŸŸ
+*			  pusRagBuf : nä¸ªå¯„å­˜å™¨çš„æ•°æ®ã€‚é•¿åº¦ = 2 * n
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMasterSend10H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint8_t usRagNum, uint16_t *pusRagBuf)
@@ -376,25 +376,25 @@ static void ModbusMasterSend10H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAd
 	uint8_t *buf = (uint8_t *)pusRagBuf;
 
 	pxModbusMaster->pxModbusBase->usTXCnt = 0;
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ´ÓÕ¾µØÖ· */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x10;									/* ´ÓÕ¾µØÖ· */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* ¼Ä´æÆ÷±àºÅ ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* ¼Ä´æÆ÷±àºÅ µÍ×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* ¼Ä´æÆ÷¸öÊı ¸ß×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* ¼Ä´æÆ÷¸öÊı µÍ×Ö½Ú */
-	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 2 * usRagNum;							/* Êı¾İ×Ö½ÚÊı */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* ä»ç«™åœ°å€ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x10;									/* ä»ç«™åœ°å€ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr >> 8;						/* å¯„å­˜å™¨ç¼–å· é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagAddr;							/* å¯„å­˜å™¨ç¼–å· ä½å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum >> 8;						/* å¯„å­˜å™¨ä¸ªæ•° é«˜å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = usRagNum;								/* å¯„å­˜å™¨ä¸ªæ•° ä½å­—èŠ‚ */
+	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 2 * usRagNum;							/* æ•°æ®å­—èŠ‚æ•° */
 
 	for (i = 0; i < usRagNum; i++)
 	{
 		if (pxModbusMaster->pxModbusBase->usTXCnt > (pxModbusMaster->pxModbusBase->usTXLen - 2))
 		{
-			return; /* Êı¾İ³¬¹ı»º³åÇø³¬¶È£¬Ö±½Ó¶ªÆú²»·¢ËÍ */
+			return; /* æ•°æ®è¶…è¿‡ç¼“å†²åŒºè¶…åº¦ï¼Œç›´æ¥ä¸¢å¼ƒä¸å‘é€ */
 		}
-		pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = buf[2 * i + 1]; /* ºóÃæµÄÊı¾İ³¤¶È */
+		pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = buf[2 * i + 1]; /* åé¢çš„æ•°æ®é•¿åº¦ */
 		pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = buf[2 * i];
 	}
 
-	ModbusMasterSendAckWithCRC(pxModbusMaster); /* ·¢ËÍÊı¾İ£¬×Ô¶¯¼ÓCRC */
+	ModbusMasterSendAckWithCRC(pxModbusMaster); /* å‘é€æ•°æ®ï¼Œè‡ªåŠ¨åŠ CRC */
 
 	pxModbusMaster->ucRegNum = usRagNum;
 	pxModbusMaster->usReg10H = usRagAddr;
@@ -402,37 +402,37 @@ static void ModbusMasterSend10H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAd
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterPoll
-*	¹¦ÄÜËµÃ÷: ½ÓÊÕ¿ØÖÆÆ÷Ö¸Áî. 1ms ÏìÓ¦Ê±¼ä¡£
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: 0 ±íÊ¾ÎŞÊı¾İ 1±íÊ¾ÊÕµ½ÕıÈ·ÃüÁî
+*	å‡½ æ•° å: ModbusMasterPoll
+*	åŠŸèƒ½è¯´æ˜: æ¥æ”¶æ§åˆ¶å™¨æŒ‡ä»¤. 1ms å“åº”æ—¶é—´ã€‚
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: 0 è¡¨ç¤ºæ— æ•°æ® 1è¡¨ç¤ºæ”¶åˆ°æ­£ç¡®å‘½ä»¤
 *********************************************************************************************************
 */
 static void ModbusMasterPoll(ModbusMaster_t *pxModbusMaster)
 {
 	if (pxModbusMaster->pxModbusBase->pucRXBuf[0] != pxModbusMaster->pxModbusBase->ucAddr || pxModbusMaster->pxModbusBase->usRXCnt < 4)
 		goto err_ret;
-	/* ¼ÆËãCRCĞ£Ñé */
+	/* è®¡ç®—CRCæ ¡éªŒ */
 	if (CRC16Modbus(pxModbusMaster->pxModbusBase->pucRXBuf, pxModbusMaster->pxModbusBase->usRXCnt) != 0)
 		goto err_ret;
-	/* ·ÖÎöÓ¦ÓÃ²ãĞ­Òé */
+	/* åˆ†æåº”ç”¨å±‚åè®® */
 	ModbusMasterAnalyzeApp(pxModbusMaster);
 err_ret:
-	pxModbusMaster->pxModbusBase->usRXCnt = 0; /* ±ØĞëÇåÁã¼ÆÊıÆ÷£¬·½±ãÏÂ´ÎÖ¡Í¬²½ */
+	pxModbusMaster->pxModbusBase->usRXCnt = 0; /* å¿…é¡»æ¸…é›¶è®¡æ•°å™¨ï¼Œæ–¹ä¾¿ä¸‹æ¬¡å¸§åŒæ­¥ */
 }
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMaster01H
-*	¹¦ÄÜËµÃ÷: ·ÖÎö01HÖ¸ÁîµÄÓ¦´ğÊı¾İ
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMaster01H
+*	åŠŸèƒ½è¯´æ˜: åˆ†æ01HæŒ‡ä»¤çš„åº”ç­”æ•°æ®
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMaster01H(ModbusMaster_t *pxModbusMaster)
 {
 	uint8_t *p;
-	uint8_t bytes = pxModbusMaster->pxModbusBase->pucRXBuf[2] >> 1; /* Êı¾İ³¤¶È ×Ö½ÚÊı */
+	uint8_t bytes = pxModbusMaster->pxModbusBase->pucRXBuf[2] >> 1; /* æ•°æ®é•¿åº¦ å­—èŠ‚æ•° */
 	if ((pxModbusMaster->usReg01H >= pxModbusMaster->pxModbusBase->usCoilStartAddr) && ((pxModbusMaster->usReg01H + bytes) <= (pxModbusMaster->pxModbusBase->usCoilStartAddr + pxModbusMaster->pxModbusBase->usCoilSize)))
 	{
 		uint8_t *p = &pxModbusMaster->pxModbusBase->pucRXBuf[3];
@@ -446,16 +446,16 @@ static void ModbusMaster01H(ModbusMaster_t *pxModbusMaster)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMaster02H
-*	¹¦ÄÜËµÃ÷: ·ÖÎö02HÖ¸ÁîµÄÓ¦´ğÊı¾İ
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMaster02H
+*	åŠŸèƒ½è¯´æ˜: åˆ†æ02HæŒ‡ä»¤çš„åº”ç­”æ•°æ®
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMaster02H(ModbusMaster_t *pxModbusMaster)
 {
 	uint8_t *p;
-	uint8_t bytes = pxModbusMaster->pxModbusBase->pucRXBuf[2] >> 1; /* Êı¾İ³¤¶È ×Ö½ÚÊı */
+	uint8_t bytes = pxModbusMaster->pxModbusBase->pucRXBuf[2] >> 1; /* æ•°æ®é•¿åº¦ å­—èŠ‚æ•° */
 	if ((pxModbusMaster->usReg02H >= pxModbusMaster->pxModbusBase->usDiscInStartAddr) && ((pxModbusMaster->usReg02H + bytes) <= (pxModbusMaster->pxModbusBase->usDiscInStartAddr + pxModbusMaster->pxModbusBase->usDiscInSize)))
 	{
 		uint8_t *p = &pxModbusMaster->pxModbusBase->pucRXBuf[3];
@@ -469,16 +469,16 @@ static void ModbusMaster02H(ModbusMaster_t *pxModbusMaster)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMaster03H
-*	¹¦ÄÜËµÃ÷: ·ÖÎö03HÖ¸ÁîµÄÓ¦´ğÊı¾İ
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMaster03H
+*	åŠŸèƒ½è¯´æ˜: åˆ†æ03HæŒ‡ä»¤çš„åº”ç­”æ•°æ®
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMaster03H(ModbusMaster_t *pxModbusMaster)
 {
 	uint8_t *p;
-	uint8_t bytes = pxModbusMaster->pxModbusBase->pucRXBuf[2] >> 1; /* Êı¾İ³¤¶È ×Ö½ÚÊı */
+	uint8_t bytes = pxModbusMaster->pxModbusBase->pucRXBuf[2] >> 1; /* æ•°æ®é•¿åº¦ å­—èŠ‚æ•° */
 	if ((pxModbusMaster->usReg03H >= pxModbusMaster->pxModbusBase->usRegHoldStartAddr) && ((pxModbusMaster->usReg03H + bytes) <= (pxModbusMaster->pxModbusBase->usRegHoldStartAddr + pxModbusMaster->pxModbusBase->usRegHoldSize)))
 	{
 		uint8_t *p = &pxModbusMaster->pxModbusBase->pucRXBuf[3];
@@ -492,16 +492,16 @@ static void ModbusMaster03H(ModbusMaster_t *pxModbusMaster)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMaster04H
-*	¹¦ÄÜËµÃ÷: ·ÖÎö04HÖ¸ÁîµÄÓ¦´ğÊı¾İ
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMaster04H
+*	åŠŸèƒ½è¯´æ˜: åˆ†æ04HæŒ‡ä»¤çš„åº”ç­”æ•°æ®
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMaster04H(ModbusMaster_t *pxModbusMaster)
 {
 	uint8_t *p;
-	uint8_t bytes = pxModbusMaster->pxModbusBase->pucRXBuf[2] >> 1; /* Êı¾İ³¤¶È ×Ö½ÚÊı */
+	uint8_t bytes = pxModbusMaster->pxModbusBase->pucRXBuf[2] >> 1; /* æ•°æ®é•¿åº¦ å­—èŠ‚æ•° */
 	if ((pxModbusMaster->usReg04H >= pxModbusMaster->pxModbusBase->usRegInStartAddr) && ((pxModbusMaster->usReg04H + bytes) <= (pxModbusMaster->pxModbusBase->usRegInStartAddr + pxModbusMaster->pxModbusBase->usRegInSize)))
 	{
 		uint8_t *p = &pxModbusMaster->pxModbusBase->pucRXBuf[3];
@@ -515,10 +515,10 @@ static void ModbusMaster04H(ModbusMaster_t *pxModbusMaster)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMaster05H
-*	¹¦ÄÜËµÃ÷: ·ÖÎö05HÖ¸ÁîµÄÓ¦´ğÊı¾İ
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMaster05H
+*	åŠŸèƒ½è¯´æ˜: åˆ†æ05HæŒ‡ä»¤çš„åº”ç­”æ•°æ®
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMaster05H(ModbusMaster_t *pxModbusMaster)
@@ -527,10 +527,10 @@ static void ModbusMaster05H(ModbusMaster_t *pxModbusMaster)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMaster06H
-*	¹¦ÄÜËµÃ÷: ·ÖÎö06HÖ¸ÁîµÄÓ¦´ğÊı¾İ
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMaster06H
+*	åŠŸèƒ½è¯´æ˜: åˆ†æ06HæŒ‡ä»¤çš„åº”ç­”æ•°æ®
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMaster06H(ModbusMaster_t *pxModbusMaster)
@@ -539,10 +539,10 @@ static void ModbusMaster06H(ModbusMaster_t *pxModbusMaster)
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMaster10H
-*	¹¦ÄÜËµÃ÷: ·ÖÎö10HÖ¸ÁîµÄÓ¦´ğÊı¾İ
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: ÎŞ
+*	å‡½ æ•° å: ModbusMaster10H
+*	åŠŸèƒ½è¯´æ˜: åˆ†æ10HæŒ‡ä»¤çš„åº”ç­”æ•°æ®
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: æ— 
 *********************************************************************************************************
 */
 static void ModbusMaster10H(ModbusMaster_t *pxModbusMaster)
@@ -550,10 +550,10 @@ static void ModbusMaster10H(ModbusMaster_t *pxModbusMaster)
 }
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterReadParam01H
-*	¹¦ÄÜËµÃ÷: µ¥¸ö²ÎÊı. Í¨¹ı·¢ËÍ01HÖ¸ÁîÊµÏÖ£¬·¢ËÍÖ®ºó£¬µÈ´ı´Ó»úÓ¦´ğ¡£
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: 1 ±íÊ¾³É¹¦¡£0 ±íÊ¾Ê§°Ü£¨Í¨ĞÅ³¬Ê±»ò±»¾Ü¾ø£©
+*	å‡½ æ•° å: ModbusMasterReadParam01H
+*	åŠŸèƒ½è¯´æ˜: å•ä¸ªå‚æ•°. é€šè¿‡å‘é€01HæŒ‡ä»¤å®ç°ï¼Œå‘é€ä¹‹åï¼Œç­‰å¾…ä»æœºåº”ç­”ã€‚
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: 1 è¡¨ç¤ºæˆåŠŸã€‚0 è¡¨ç¤ºå¤±è´¥ï¼ˆé€šä¿¡è¶…æ—¶æˆ–è¢«æ‹’ç»ï¼‰
 *********************************************************************************************************
 */
 uint8_t ModbusMasterReadParam01H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagNum)
@@ -563,7 +563,7 @@ uint8_t ModbusMasterReadParam01H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 	uint8_t res = 0;
 	for (i = 0; i < pxModbusMaster->ucRXErrNum; i++)
 	{
-		ModbusMasterSend01H(pxModbusMaster, usRagAddr, usRagNum); /* ·¢ËÍÃüÁî */
+		ModbusMasterSend01H(pxModbusMaster, usRagAddr, usRagNum); /* å‘é€å‘½ä»¤ */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
 			ModbusMasterPoll(pxModbusMaster);
@@ -577,10 +577,10 @@ uint8_t ModbusMasterReadParam01H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterReadParam02H
-*	¹¦ÄÜËµÃ÷: µ¥¸ö²ÎÊı. Í¨¹ı·¢ËÍ02HÖ¸ÁîÊµÏÖ£¬·¢ËÍÖ®ºó£¬µÈ´ı´Ó»úÓ¦´ğ¡£
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: 1 ±íÊ¾³É¹¦¡£0 ±íÊ¾Ê§°Ü£¨Í¨ĞÅ³¬Ê±»ò±»¾Ü¾ø£©
+*	å‡½ æ•° å: ModbusMasterReadParam02H
+*	åŠŸèƒ½è¯´æ˜: å•ä¸ªå‚æ•°. é€šè¿‡å‘é€02HæŒ‡ä»¤å®ç°ï¼Œå‘é€ä¹‹åï¼Œç­‰å¾…ä»æœºåº”ç­”ã€‚
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: 1 è¡¨ç¤ºæˆåŠŸã€‚0 è¡¨ç¤ºå¤±è´¥ï¼ˆé€šä¿¡è¶…æ—¶æˆ–è¢«æ‹’ç»ï¼‰
 *********************************************************************************************************
 */
 uint8_t ModbusMasterReadParam02H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagNum)
@@ -590,7 +590,7 @@ uint8_t ModbusMasterReadParam02H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 	uint8_t res = 0;
 	for (i = 0; i < pxModbusMaster->ucRXErrNum; i++)
 	{
-		ModbusMasterSend02H(pxModbusMaster, usRagAddr, usRagNum); /* ·¢ËÍÃüÁî */
+		ModbusMasterSend02H(pxModbusMaster, usRagAddr, usRagNum); /* å‘é€å‘½ä»¤ */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
 			ModbusMasterPoll(pxModbusMaster);
@@ -603,10 +603,10 @@ uint8_t ModbusMasterReadParam02H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 }
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterReadParam03H
-*	¹¦ÄÜËµÃ÷: µ¥¸ö²ÎÊı. Í¨¹ı·¢ËÍ03HÖ¸ÁîÊµÏÖ£¬·¢ËÍÖ®ºó£¬µÈ´ı´Ó»úÓ¦´ğ¡£
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: 1 ±íÊ¾³É¹¦¡£0 ±íÊ¾Ê§°Ü£¨Í¨ĞÅ³¬Ê±»ò±»¾Ü¾ø£©
+*	å‡½ æ•° å: ModbusMasterReadParam03H
+*	åŠŸèƒ½è¯´æ˜: å•ä¸ªå‚æ•°. é€šè¿‡å‘é€03HæŒ‡ä»¤å®ç°ï¼Œå‘é€ä¹‹åï¼Œç­‰å¾…ä»æœºåº”ç­”ã€‚
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: 1 è¡¨ç¤ºæˆåŠŸã€‚0 è¡¨ç¤ºå¤±è´¥ï¼ˆé€šä¿¡è¶…æ—¶æˆ–è¢«æ‹’ç»ï¼‰
 *********************************************************************************************************
 */
 uint8_t ModbusMasterReadParam03H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagNum)
@@ -616,7 +616,7 @@ uint8_t ModbusMasterReadParam03H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 	uint8_t res = 0;
 	for (i = 0; i < pxModbusMaster->ucRXErrNum; i++)
 	{
-		ModbusMasterSend03H(pxModbusMaster, usRagAddr, usRagNum); /* ·¢ËÍÃüÁî */
+		ModbusMasterSend03H(pxModbusMaster, usRagAddr, usRagNum); /* å‘é€å‘½ä»¤ */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
 			ModbusMasterPoll(pxModbusMaster);
@@ -630,10 +630,10 @@ uint8_t ModbusMasterReadParam03H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterReadParam04H
-*	¹¦ÄÜËµÃ÷: µ¥¸ö²ÎÊı. Í¨¹ı·¢ËÍ04HÖ¸ÁîÊµÏÖ£¬·¢ËÍÖ®ºó£¬µÈ´ı´Ó»úÓ¦´ğ¡£
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: 1 ±íÊ¾³É¹¦¡£0 ±íÊ¾Ê§°Ü£¨Í¨ĞÅ³¬Ê±»ò±»¾Ü¾ø£©
+*	å‡½ æ•° å: ModbusMasterReadParam04H
+*	åŠŸèƒ½è¯´æ˜: å•ä¸ªå‚æ•°. é€šè¿‡å‘é€04HæŒ‡ä»¤å®ç°ï¼Œå‘é€ä¹‹åï¼Œç­‰å¾…ä»æœºåº”ç­”ã€‚
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: 1 è¡¨ç¤ºæˆåŠŸã€‚0 è¡¨ç¤ºå¤±è´¥ï¼ˆé€šä¿¡è¶…æ—¶æˆ–è¢«æ‹’ç»ï¼‰
 *********************************************************************************************************
 */
 uint8_t ModbusMasterReadParam04H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagNum)
@@ -643,7 +643,7 @@ uint8_t ModbusMasterReadParam04H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 	uint8_t res = 0;
 	for (i = 0; i < pxModbusMaster->ucRXErrNum; i++)
 	{
-		ModbusMasterSend04H(pxModbusMaster, usRagAddr, usRagNum); /* ·¢ËÍÃüÁî */
+		ModbusMasterSend04H(pxModbusMaster, usRagAddr, usRagNum); /* å‘é€å‘½ä»¤ */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
 			ModbusMasterPoll(pxModbusMaster);
@@ -656,10 +656,10 @@ uint8_t ModbusMasterReadParam04H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 }
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterWriteParam05H
-*	¹¦ÄÜËµÃ÷: µ¥¸ö²ÎÊı. Í¨¹ı·¢ËÍ05HÖ¸ÁîÊµÏÖ£¬·¢ËÍÖ®ºó£¬µÈ´ı´Ó»úÓ¦´ğ¡£
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: 1 ±íÊ¾³É¹¦¡£0 ±íÊ¾Ê§°Ü£¨Í¨ĞÅ³¬Ê±»ò±»¾Ü¾ø£©
+*	å‡½ æ•° å: ModbusMasterWriteParam05H
+*	åŠŸèƒ½è¯´æ˜: å•ä¸ªå‚æ•°. é€šè¿‡å‘é€05HæŒ‡ä»¤å®ç°ï¼Œå‘é€ä¹‹åï¼Œç­‰å¾…ä»æœºåº”ç­”ã€‚
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: 1 è¡¨ç¤ºæˆåŠŸã€‚0 è¡¨ç¤ºå¤±è´¥ï¼ˆé€šä¿¡è¶…æ—¶æˆ–è¢«æ‹’ç»ï¼‰
 *********************************************************************************************************
 */
 uint8_t ModbusMasterWriteParam05H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagValue)
@@ -669,7 +669,7 @@ uint8_t ModbusMasterWriteParam05H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 	uint8_t res = 0;
 	for (i = 0; i < pxModbusMaster->ucRXErrNum; i++)
 	{
-		ModbusMasterSend05H(pxModbusMaster, usRagAddr, usRagValue); /* ·¢ËÍÃüÁî */
+		ModbusMasterSend05H(pxModbusMaster, usRagAddr, usRagValue); /* å‘é€å‘½ä»¤ */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
 			ModbusMasterPoll(pxModbusMaster);
@@ -683,10 +683,10 @@ uint8_t ModbusMasterWriteParam05H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterWriteParam06H
-*	¹¦ÄÜËµÃ÷: µ¥¸ö²ÎÊı. Í¨¹ı·¢ËÍ06HÖ¸ÁîÊµÏÖ£¬·¢ËÍÖ®ºó£¬µÈ´ı´Ó»úÓ¦´ğ¡£Ñ­»·NUM´ÎĞ´ÃüÁî
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: 1 ±íÊ¾³É¹¦¡£0 ±íÊ¾Ê§°Ü£¨Í¨ĞÅ³¬Ê±»ò±»¾Ü¾ø£©
+*	å‡½ æ•° å: ModbusMasterWriteParam06H
+*	åŠŸèƒ½è¯´æ˜: å•ä¸ªå‚æ•°. é€šè¿‡å‘é€06HæŒ‡ä»¤å®ç°ï¼Œå‘é€ä¹‹åï¼Œç­‰å¾…ä»æœºåº”ç­”ã€‚å¾ªç¯NUMæ¬¡å†™å‘½ä»¤
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: 1 è¡¨ç¤ºæˆåŠŸã€‚0 è¡¨ç¤ºå¤±è´¥ï¼ˆé€šä¿¡è¶…æ—¶æˆ–è¢«æ‹’ç»ï¼‰
 *********************************************************************************************************
 */
 uint8_t ModbusMasterWriteParam06H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagValue)
@@ -696,7 +696,7 @@ uint8_t ModbusMasterWriteParam06H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 	uint8_t res = 0;
 	for (i = 0; i < pxModbusMaster->ucRXErrNum; i++)
 	{
-		ModbusMasterSend06H(pxModbusMaster, usRagAddr, usRagValue); /* ·¢ËÍÃüÁî */
+		ModbusMasterSend06H(pxModbusMaster, usRagAddr, usRagValue); /* å‘é€å‘½ä»¤ */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
 			ModbusMasterPoll(pxModbusMaster);
@@ -710,10 +710,10 @@ uint8_t ModbusMasterWriteParam06H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 
 /*
 *********************************************************************************************************
-*	º¯ Êı Ãû: ModbusMasterWriteParam10H
-*	¹¦ÄÜËµÃ÷: µ¥¸ö²ÎÊı. Í¨¹ı·¢ËÍ10HÖ¸ÁîÊµÏÖ£¬·¢ËÍÖ®ºó£¬µÈ´ı´Ó»úÓ¦´ğ¡£Ñ­»·NUM´ÎĞ´ÃüÁî
-*	ĞÎ    ²Î: ÎŞ
-*	·µ »Ø Öµ: 1 ±íÊ¾³É¹¦¡£0 ±íÊ¾Ê§°Ü£¨Í¨ĞÅ³¬Ê±»ò±»¾Ü¾ø£©
+*	å‡½ æ•° å: ModbusMasterWriteParam10H
+*	åŠŸèƒ½è¯´æ˜: å•ä¸ªå‚æ•°. é€šè¿‡å‘é€10HæŒ‡ä»¤å®ç°ï¼Œå‘é€ä¹‹åï¼Œç­‰å¾…ä»æœºåº”ç­”ã€‚å¾ªç¯NUMæ¬¡å†™å‘½ä»¤
+*	å½¢    å‚: æ— 
+*	è¿” å› å€¼: 1 è¡¨ç¤ºæˆåŠŸã€‚0 è¡¨ç¤ºå¤±è´¥ï¼ˆé€šä¿¡è¶…æ—¶æˆ–è¢«æ‹’ç»ï¼‰
 *********************************************************************************************************
 */
 uint8_t ModbusMasterWriteParam10H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint8_t usRagNum, uint16_t *pusRagBuf)
@@ -723,7 +723,7 @@ uint8_t ModbusMasterWriteParam10H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 	uint8_t res = 0;
 	for (i = 0; i < pxModbusMaster->ucRXErrNum; i++)
 	{
-		ModbusMasterSend10H(pxModbusMaster, usRagAddr, usRagNum, pusRagBuf); /* ·¢ËÍÃüÁî */
+		ModbusMasterSend10H(pxModbusMaster, usRagAddr, usRagNum, pusRagBuf); /* å‘é€å‘½ä»¤ */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
 			ModbusMasterPoll(pxModbusMaster);
@@ -735,7 +735,7 @@ uint8_t ModbusMasterWriteParam10H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 	return res;
 }
 
-/***************************** °²¸»À³µç×Ó www.armfly.com (END OF FILE) *********************************/
+/***************************** å®‰å¯Œè±ç”µå­ www.armfly.com (END OF FILE) *********************************/
 /******************************************************************************************************/
 uint8_t ModbusMasterRead03H(ModbusMaster_t *pxModbusMaster, uint16_t usAdd, uint16_t *pusBuf, uint16_t usSize)
 {
