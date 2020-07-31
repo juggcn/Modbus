@@ -172,7 +172,8 @@ __WEAK uint8_t ModbusSlavePollCallBack(ModbusSlave_t *pxModbusSlave)
 void ModbusSlavePoll(ModbusSlave_t *pxModbusSlave)
 {
 	pxModbusSlave->pxModbusBase->pucRead(pxModbusSlave->pxModbusBase, NULL, NULL);
-	if (pxModbusSlave->pxModbusBase->pucRXBuf[0] != 0 && pxModbusSlave->pxModbusBase->pucRXBuf[0] != pxModbusSlave->pxModbusBase->ucAddr) /* 判断主机发送的命令地址是否符合 */
+	if (pxModbusSlave->pxModbusBase->pucRXBuf[0] != 0 &&
+		pxModbusSlave->pxModbusBase->pucRXBuf[0] != pxModbusSlave->pxModbusBase->ucAddr) /* 判断主机发送的命令地址是否符合 */
 		goto err_ret;
 	if (pxModbusSlave->pxModbusBase->usRXCnt < 4) /* 判断主机发送数据小于4个字节就认为错误 */
 		goto err_ret;
