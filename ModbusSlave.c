@@ -303,9 +303,15 @@ static uint8_t ModbusSlave03HCallBack(ModbusSlave_t *pxModbusSlave, uint16_t reg
 	{
 		if (pxModbusSlave->pucRegHoldFun != NULL)
 		{
-			ucRes = pxModbusSlave->pucRegHoldFun((struct ModbusSlave_t *)pxModbusSlave, reg_addr, reg_value, usLen, 0);
-			for (uint16_t i = 0; i < usLen; i++)
-				*(reg_value + i) = ((*(reg_value + i) << 8) & 0xff00) | ((*(reg_value + i) >> 8) & 0xff);
+			if (reg_addr >= pxModbusSlave->pxModbusBase->usRegHoldStartAddr &&
+				(reg_addr + usLen) <= (pxModbusSlave->pxModbusBase->usRegHoldStartAddr + pxModbusSlave->pxModbusBase->usRegHoldSize))
+			{
+				ucRes = pxModbusSlave->pucRegHoldFun((struct ModbusSlave_t *)pxModbusSlave, reg_addr, reg_value, usLen, 0);
+				for (uint16_t i = 0; i < usLen; i++)
+				{
+					*(reg_value + i) = ((*(reg_value + i) << 8) & 0xff00) | ((*(reg_value + i) >> 8) & 0xff);
+				}
+			}
 		}
 	}
 	return ucRes;
@@ -318,9 +324,15 @@ static uint8_t ModbusSlave04HCallBack(ModbusSlave_t *pxModbusSlave, uint16_t reg
 	{
 		if (pxModbusSlave->pucRegInFun != NULL)
 		{
-			ucRes = pxModbusSlave->pucRegInFun((struct ModbusSlave_t *)pxModbusSlave, reg_addr, reg_value, usLen);
-			for (uint16_t i = 0; i < usLen; i++)
-				*(reg_value + i) = ((*(reg_value + i) << 8) & 0xff00) | ((*(reg_value + i) >> 8) & 0xff);
+			if (reg_addr >= pxModbusSlave->pxModbusBase->usRegInStartAddr &&
+				(reg_addr + usLen) <= (pxModbusSlave->pxModbusBase->usRegInStartAddr + pxModbusSlave->pxModbusBase->usRegInSize))
+			{
+				ucRes = pxModbusSlave->pucRegInFun((struct ModbusSlave_t *)pxModbusSlave, reg_addr, reg_value, usLen);
+				for (uint16_t i = 0; i < usLen; i++)
+				{
+					*(reg_value + i) = ((*(reg_value + i) << 8) & 0xff00) | ((*(reg_value + i) >> 8) & 0xff);
+				}
+			}
 		}
 	}
 	return ucRes;
@@ -343,7 +355,11 @@ static uint8_t ModbusSlave06H10HCallBack(ModbusSlave_t *pxModbusSlave, uint16_t 
 	{
 		if (pxModbusSlave->pucRegHoldFun != NULL)
 		{
-			ucRes = pxModbusSlave->pucRegHoldFun((struct ModbusSlave_t *)pxModbusSlave, reg_addr, reg_value, usLen, 1);
+			if (reg_addr >= pxModbusSlave->pxModbusBase->usRegHoldStartAddr &&
+				(reg_addr + usLen) <= (pxModbusSlave->pxModbusBase->usRegHoldStartAddr + pxModbusSlave->pxModbusBase->usRegHoldSize))
+			{
+				ucRes = pxModbusSlave->pucRegHoldFun((struct ModbusSlave_t *)pxModbusSlave, reg_addr, reg_value, usLen, 1);
+			}
 		}
 	}
 	return ucRes;
