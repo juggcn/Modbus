@@ -10,20 +10,13 @@
 
 #include "usart.h"
 
-#include "FreeRTOS.h"
-#include "task.h"
-#include "queue.h"
-#include "event_groups.h"
-#include "semphr.h"
-#include "timers.h"
-#include "croutine.h"
-#include "stream_buffer.h"
+#include "cmsis_os2.h"
 
 typedef struct ModbusBaseType_t
 {
-    SemaphoreHandle_t xSemTXTC;
-    SemaphoreHandle_t xSemRXRC;
-    SemaphoreHandle_t xSemLock;
+    osSemaphoreId_t xSemTXTC;
+    osSemaphoreId_t xSemRXRC;
+    osSemaphoreId_t xSemLock;
     void (*pvLock)(struct ModbusBaseType_t *pxModbusBase);
     void (*pvUnLock)(struct ModbusBaseType_t *pxModbusBase);
 
