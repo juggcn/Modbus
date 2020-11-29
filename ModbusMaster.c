@@ -720,7 +720,6 @@ uint8_t ModbusMasterWriteParam10H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 	return res;
 }
 
-/***************************** 安富莱电子 www.armfly.com (END OF FILE) *********************************/
 /******************************************************************************************************/
 uint8_t ModbusMasterRead03H(ModbusMaster_t *pxModbusMaster, uint16_t usAdd, uint16_t *pusBuf, uint16_t usSize)
 {

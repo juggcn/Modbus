@@ -1,12 +1,6 @@
 #ifndef __MODBUSMASTER__
 #define __MODBUSMASTER__
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-#include <math.h>
-
 #include "ModbusBase.h"
 
 typedef struct ModbusMaster_t
