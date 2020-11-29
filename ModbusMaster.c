@@ -252,6 +252,7 @@ static void ModbusMasterSend02H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAd
 */
 static void ModbusMasterSend03H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAddr, uint16_t usRagNum)
 {
+
 	pxModbusMaster->pxModbusBase->usTXCnt = 0;
 	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = pxModbusMaster->pxModbusBase->ucAddr; /* 从站地址 */
 	pxModbusMaster->pxModbusBase->pucTXBuf[pxModbusMaster->pxModbusBase->usTXCnt++] = 0x03;									/* 功能码 */
