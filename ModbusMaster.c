@@ -394,8 +394,9 @@ static void ModbusMasterSend10H(ModbusMaster_t *pxModbusMaster, uint16_t usRagAd
 *	返 回 值: 0 表示无数据 1表示收到正确命令
 *********************************************************************************************************
 */
-static void ModbusMasterPoll(ModbusMaster_t *pxModbusMaster)
+static uint8_t ModbusMasterPoll(ModbusMaster_t *pxModbusMaster)
 {
+	uint8_t res = 0;
 	if (pxModbusMaster->pxModbusBase->pucRXBuf[0] != pxModbusMaster->pxModbusBase->ucAddr || pxModbusMaster->pxModbusBase->usRXCnt < 4)
 		goto err_ret;
 	/* 计算CRC校验 */
@@ -403,8 +404,10 @@ static void ModbusMasterPoll(ModbusMaster_t *pxModbusMaster)
 		goto err_ret;
 	/* 分析应用层协议 */
 	ModbusMasterAnalyzeApp(pxModbusMaster);
+	res = 1;
 err_ret:
 	pxModbusMaster->pxModbusBase->usRXCnt = 0; /* 必须清零计数器，方便下次帧同步 */
+	return res;
 }
 
 /*
@@ -552,9 +555,11 @@ uint8_t ModbusMasterReadParam01H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 		ModbusMasterSend01H(pxModbusMaster, usRagAddr, usRagNum); /* 发送命令 */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
-			ModbusMasterPoll(pxModbusMaster);
-			res = 1;
-			break;
+			res = ModbusMasterPoll(pxModbusMaster);
+			if (res == 1)
+			{
+				break;
+			}
 		}
 	}
 	pxModbusMaster->pxModbusBase->pvUnLock(pxModbusMaster->pxModbusBase);
@@ -579,9 +584,11 @@ uint8_t ModbusMasterReadParam02H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 		ModbusMasterSend02H(pxModbusMaster, usRagAddr, usRagNum); /* 发送命令 */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
-			ModbusMasterPoll(pxModbusMaster);
-			res = 1;
-			break;
+			res = ModbusMasterPoll(pxModbusMaster);
+			if (res == 1)
+			{
+				break;
+			}
 		}
 	}
 	pxModbusMaster->pxModbusBase->pvUnLock(pxModbusMaster->pxModbusBase);
@@ -605,9 +612,11 @@ uint8_t ModbusMasterReadParam03H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 		ModbusMasterSend03H(pxModbusMaster, usRagAddr, usRagNum); /* 发送命令 */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
-			ModbusMasterPoll(pxModbusMaster);
-			res = 1;
-			break;
+			res = ModbusMasterPoll(pxModbusMaster);
+			if (res == 1)
+			{
+				break;
+			}
 		}
 	}
 	pxModbusMaster->pxModbusBase->pvUnLock(pxModbusMaster->pxModbusBase);
@@ -632,9 +641,11 @@ uint8_t ModbusMasterReadParam04H(ModbusMaster_t *pxModbusMaster, uint16_t usRagA
 		ModbusMasterSend04H(pxModbusMaster, usRagAddr, usRagNum); /* 发送命令 */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
-			ModbusMasterPoll(pxModbusMaster);
-			res = 1;
-			break;
+			res = ModbusMasterPoll(pxModbusMaster);
+			if (res == 1)
+			{
+				break;
+			}
 		}
 	}
 	pxModbusMaster->pxModbusBase->pvUnLock(pxModbusMaster->pxModbusBase);
@@ -658,9 +669,11 @@ uint8_t ModbusMasterWriteParam05H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 		ModbusMasterSend05H(pxModbusMaster, usRagAddr, usRagValue); /* 发送命令 */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
-			ModbusMasterPoll(pxModbusMaster);
-			res = 1;
-			break;
+			res = ModbusMasterPoll(pxModbusMaster);
+			if (res == 1)
+			{
+				break;
+			}
 		}
 	}
 	pxModbusMaster->pxModbusBase->pvUnLock(pxModbusMaster->pxModbusBase);
@@ -685,9 +698,11 @@ uint8_t ModbusMasterWriteParam06H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 		ModbusMasterSend06H(pxModbusMaster, usRagAddr, usRagValue); /* 发送命令 */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
-			ModbusMasterPoll(pxModbusMaster);
-			res = 1;
-			break;
+			res = ModbusMasterPoll(pxModbusMaster);
+			if (res == 1)
+			{
+				break;
+			}
 		}
 	}
 	pxModbusMaster->pxModbusBase->pvUnLock(pxModbusMaster->pxModbusBase);
@@ -712,9 +727,11 @@ uint8_t ModbusMasterWriteParam10H(ModbusMaster_t *pxModbusMaster, uint16_t usRag
 		ModbusMasterSend10H(pxModbusMaster, usRagAddr, usRagNum, pusRagBuf); /* 发送命令 */
 		if (pxModbusMaster->pxModbusBase->pucRead(pxModbusMaster->pxModbusBase, NULL, NULL) == 1)
 		{
-			ModbusMasterPoll(pxModbusMaster);
-			res = 1;
-			break;
+			res = ModbusMasterPoll(pxModbusMaster);
+			if (res == 1)
+			{
+				break;
+			}
 		}
 	}
 	pxModbusMaster->pxModbusBase->pvUnLock(pxModbusMaster->pxModbusBase);
